@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Real-Time AI Nutrition Companion</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #conversation { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
+  </style>
+</head>
+<body>
+  <h1>AI Nutrition Companion</h1>
+  <div id="conversation"></div>
+  <script>
+    const conversationDiv = document.getElementById("conversation");
+    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    let mediaRecorder;
+    
+    ws.onopen = () => {
+      console.log("WebSocket connection established.");
+      startAudioCapture();
+    };
+
+    ws.onmessage = async (event) => {
+      if (typeof event.data === "string") {
+        // Text message with conversation update
+        const data = JSON.parse(event.data);
+        appendMessage("User (ASR):", data.transcript);
+        appendMessage("Bot:", data.response_text);
+      } else {
+        // Binary audio data from TTS response
+        const audioBlob = new Blob([event.data], { type: "audio/wav" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      }
+    };
+
+    function appendMessage(sender, text) {
+      const p = document.createElement("p");
+      p.innerHTML = `<strong>${sender}</strong> ${text}`;
+      conversationDiv.appendChild(p);
+      conversationDiv.scrollTop = conversationDiv.scrollHeight;
+    }
+
+    function startAudioCapture() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+          mediaRecorder.addEventListener("dataavailable", async event => {
+            if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+              ws.send(await event.data.arrayBuffer());
+            }
+          });
+          // Start recording every 250ms, continuously
+          mediaRecorder.start(250);
+        })
+        .catch(error => console.error("Error capturing audio:", error));
+    }
+  </script>
+</body>
+</html>

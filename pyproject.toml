@@ -6,9 +6,6 @@ authors = ["Daniel Huang <huangdai@hotmail.com>"]
 license = "Apache-2.0"
 readme = "README.md"
 packages = [{ include = "ai_nutrition_companion" }]
-# homepage = ""
-# repository = ""
-# documentation = ""
 keywords = ["nutrition", "ai", "real-time", "voice"]
 package-mode = false
 
@@ -17,10 +14,12 @@ python = "^3.11"
 fastapi = ">=0.115.12,<0.116.0"
 uvicorn = { version = ">=0.34.0,<0.35.0", extras = ["standard"] }
 jinja2 = ">=3.1.6,<4.0.0"
-openai-whisper = ">=20240930"
-torch = { version = "2.5.1", source = "pytorch-cu121" }
-torchvision = { version = "0.20.1", source = "pytorch-cu121" }
-torchaudio = { version = "2.5.1", source = "pytorch-cu121" }
+faster-whisper = "^1.0.1"
+numpy = "2.2.4"
+ffmpeg-python = "0.2.0"
+torch = { version = "2.5.1", source = "pytorch-cu121" } 
+openai = "^0.27.0"
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

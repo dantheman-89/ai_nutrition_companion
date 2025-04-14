@@ -1,21 +1,36 @@
 import asyncio
-import whisper
+import numpy as np
+import ffmpeg
+from io import BytesIO
+from faster_whisper import WhisperModel
 
-# Load your model globally (do this once to save time on subsequent requests)
-model = whisper.load_model("tiny")  # or "tiny" if you need faster response
+# Load the Whisper model once globally
+model = WhisperModel("base", device="cuda", compute_type="float16")
 
+# function that converts audio bytes to a mono float32 NumPy array using ffmpeg
+def decode_audio(audio_bytes: bytes, sample_rate: int = 16000) -> np.ndarray:
+    """
+    Convert input audio bytes to a mono float32 NumPy array using ffmpeg.
+    Output shape: (num_samples,)
+    """
+    out, _ = (
+        ffmpeg
+        .input("pipe:0")
+        .output("pipe:1", format="f32le", ac=1, ar=sample_rate)
+        .run(input=audio_bytes, capture_stdout=True, capture_stderr=True)
+    )
+    audio_np = np.frombuffer(out, np.float32)
+    return audio_np
+
+# function that runs Whisper to transcribe the audio
+def run_transcription(audio_bytes: bytes) -> str:
+    # This is the standalone synchronous function for transcription.
+    audio_np = decode_audio(audio_bytes)
+    segments, _ = model.transcribe(audio_np)
+    return " ".join(segment.text for segment in segments).strip()
+
+# the main async function that gets called to transcribe audio 
 async def transcribe_audio(audio_bytes: bytes) -> str:
-    """
-    Process the audio bytes using the Whisper ASR model.
-    """
-    # Save the audio to a temporary file (Whisper requires a file input)
-    with open("temp_audio.wav", "wb") as f:
-        f.write(audio_bytes)
-    
-    # Run the transcription (blocking call, so we run it in an executor)
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, model.transcribe, "temp_audio.wav")
-    
-    # Clean up temp file if needed (or you can use a BytesIO approach if supported)
-    # os.remove("temp_audio.wav")
-    return result.get("text", "").strip()
+    transcript = await loop.run_in_executor(None, run_transcription, audio_bytes)
+    return transcript

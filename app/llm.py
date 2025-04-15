@@ -14,13 +14,6 @@ system_prompt = (
     "suitable for a casual and interactive dialogue."
 )
 
-# Initialize conversation history.
-messages = [
-    {"role": "system", "content": system_prompt},
-    # Optionally add an initial user message if needed.
-    # {"role": "user", "content": "Hello"}
-]
-
 def run_stream(messages, queue, loop):
     """
     This synchronous function calls the OpenAI ChatCompletion API in streaming mode
@@ -41,7 +34,7 @@ def run_stream(messages, queue, loop):
     # Signal the end of the stream.
     asyncio.run_coroutine_threadsafe(queue.put(None), loop)
 
-async def stream_chat_completion_async(messages):
+async def stream_chat_completion(messages):
     """
     Asynchronous generator that yields tokens from the streaming ChatCompletion.
     It uses an asyncio queue to pass tokens from the blocking function running in a separate thread.

@@ -1,10 +1,12 @@
 import asyncio
 import time
-from app.llm import stream_chat_completion_async, messages 
+from app.llm import stream_chat_completion, system_prompt
 
 # Example usage:
 async def main():
-
+    # initiative messages with system prompt
+    messages = [{"role": "system", "content": system_prompt}]
+    
     # pre-determined user messages
     messages_user = ["hello", 
                      "Okay, hi, so I'm looking at nutrition needs some advice on getting healthier losing weight"
@@ -20,7 +22,7 @@ async def main():
 
         full_response = ""
         print("LLM:", end="")
-        async for token in stream_chat_completion_async(messages):
+        async for token in stream_chat_completion(messages):
             full_response += token
             # Immediately process the token (e.g. forward to TTS) if desired.
             print(token, end="", flush=True)
@@ -32,6 +34,7 @@ async def main():
         messages.append({"role": "assistant", "content": full_response})
 
 if __name__ == "__main__":
+    
     asyncio.run(main())
 
 

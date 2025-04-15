@@ -31,7 +31,7 @@ for chunk in response:
     token = chunk["choices"][0]["delta"].get("content", "")
     full_response += token
 
-print("\n--- Full Response Printed Separately: ---")
+
 print("\nLLM:", full_response)
 
 response_duration = time.perf_counter() - start_load

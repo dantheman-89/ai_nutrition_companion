@@ -27,7 +27,7 @@ def run_stream(messages, queue, loop):
     and pushes each token into an asyncio queue.
     """
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-nano",
         messages=messages,
         temperature=0.8,
         max_tokens=150,

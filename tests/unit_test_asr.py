@@ -2,7 +2,7 @@ import asyncio
 import time
 from pathlib import Path
 
-from app.asr import transcribe_audio  # Ensure this import path is correct for your project
+from app.asr.asr import transcribe_audio  # Ensure this import path is correct for your project
 
 def load_audio_file(path: Path) -> bytes:
     return path.read_bytes()

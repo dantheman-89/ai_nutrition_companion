@@ -1,6 +1,6 @@
 import asyncio
 import time
-from app.llm import stream_chat_completion, system_prompt
+from app.services.llm import stream_chat_completion, system_prompt
 
 # Example usage:
 async def main():

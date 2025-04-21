@@ -3,7 +3,9 @@ import io
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from app import asr, llm, tts
+from app.services import tts
+from app.asr import asr
+from app.services import llm
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")

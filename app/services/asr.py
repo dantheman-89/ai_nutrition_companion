@@ -24,6 +24,7 @@ async def transcribe_audio(
     return transcript
 
 # ─── Example usage ─────────────────────────────────────────────────────────────
+
 async def main():
     # import additional libraries
     from app.utils.audio_record import Recorder

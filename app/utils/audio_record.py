@@ -1,10 +1,12 @@
 import asyncio
+import io
 import numpy as np
 import sounddevice as sd
+import wave
 
 class Recorder:
     def __init__(self):
-        # we defer samplerate & dtype until record() is called
+        # frames buffer for recorded chunks
         self._frames: list[np.ndarray] = []
 
     async def record(
@@ -15,16 +17,16 @@ class Recorder:
     ) -> np.ndarray:
         """
         Record from the default audio input until ENTER is pressed.
-        
+
         :param samplerate: e.g. 16000 or 24000
-        :param dtype:      one of 'int16', 'float32', 'uint8', etc.
-        :param channels:   number of audio channels (1=mono, 2=stereo)
-        :return:           1‑D NumPy array of shape (num_samples * channels,)
+        :param dtype:      one of 'int16', 'float32', etc.
+        :param channels:   number of channels (1=mono, 2=stereo)
+        :return:           1-D NumPy array shape (num_samples * channels,)
         """
         self._frames.clear()
 
         def _callback(indata, *_):
-            # indata is a 2D array shape (frames_per_buffer, channels), dtype as requested
+            # indata: (frames_per_buffer, channels)
             self._frames.append(indata.copy())
 
         with sd.InputStream(
@@ -34,22 +36,39 @@ class Recorder:
             callback=_callback
         ):
             loop = asyncio.get_running_loop()
-            # offload blocking input() to a thread
+            # block on ENTER in a thread pool
             await loop.run_in_executor(None, input)
 
-        # concatenate all buffers along the time axis, then flatten channels
         audio = np.concatenate(self._frames, axis=0).flatten()
         return audio
 
-# ─── Example usage ─────────────────────────────────────────────────────────────
+    async def record_wav_bytes(
+        self,
+        samplerate: int,
+        dtype: str = 'int16',
+        channels: int = 1
+    ) -> bytes:
+        """
+        Record audio and return in-memory WAV container bytes.
 
-async def main():
-    print("[🎙️] Recording… Press ENTER to stop.")
-    recorder = Recorder()
-    audio_data = await recorder.record(samplerate=16000, dtype='float32')
-
-    print("[🔊] Playing… Press ENTER to stop.")
-    sd.play(audio_data, 16000); sd.wait()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        :param samplerate: sample rate for recording and WAV header
+        :param dtype:      numeric dtype to record ('int16' recommended)
+        :param channels:   number of audio channels
+        :return:           WAV file bytes
+        """
+        pcm = await self.record(samplerate, dtype, channels)
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as wf:
+            wf.setnchannels(channels)
+            # sampwidth: dtype 'int16' -> 2 bytes; 'float32' -> 4 bytes
+            sampwidth = np.dtype(dtype).itemsize
+            wf.setsampwidth(sampwidth)
+            wf.setframerate(samplerate)
+            # write raw frames
+            # if float32, convert to int16 for WAV compatibility
+            if dtype == 'float32':
+                int16 = (pcm * np.iinfo(np.int16).max).astype(np.int16)
+                wf.writeframes(int16.tobytes())
+            else:
+                wf.writeframes(pcm.tobytes())
+        return buf.getvalue()

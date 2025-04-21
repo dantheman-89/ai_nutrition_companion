@@ -1,47 +1,43 @@
 import asyncio
-from elevenlabs import ElevenLabs
+from elevenlabs.client import ElevenLabs
+from elevenlabs import stream
 from config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
+import time
 
 # Initialize the ElevenLabs client.
 client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-
-def run_speech(text: str) -> bytes:
-    # This is the standalone synchronous function for speech syntehsis.
-    audio_data = client.text_to_speech.convert(
-        voice_id=ELEVENLABS_VOICE_ID,         # voice_id: Replace with your chosen voice ID.
-        output_format="mp3_44100_128",                # output_format.
-        text=text,                           # The text to synthesize.
-        model_id="eleven_flash_v2_5",        # model_id: eleven_multilingual_v2.
-    )
-
-    # If audio_data is a generator (or any iterable that is not bytes), join it.
-    if isinstance(audio_data, bytes):
-        return audio_data
-    else:
-        # Join all the byte chunks
-        return b"".join(audio_data)
-
+# async function to generate speech
 async def synthesize_speech(text: str) -> bytes:
-    """
-    Asynchronously synthesize speech using the ElevenLabs TTS API.
-    
-    This function wraps the synchronous TTS API call in an executor so that it does not
-    block the asyncio event loop.
-    
-    Args:
-        text (str): The input text to convert to speech.
-    
-    Returns:
-        bytes: The synthesized audio data.
-    """
-    loop = asyncio.get_running_loop()
-    # Offload the blocking call to a thread.
-    audio_data = await loop.run_in_executor(
-        None,
-        run_speech,
-        text
+    audio_stream = client.text_to_speech.convert_as_stream(
+        voice_id=ELEVENLABS_VOICE_ID,
+        output_format="mp3_44100_128",
+        text=text,
+        model_id="eleven_flash_v2_5",
     )
-    return audio_data
+    return audio_stream
 
 
+# ─── Example usage ─────────────────────────────────────────────────────────────
+
+async def main():
+    # Generate speech in a separate thread
+    text = "Hi there! How’s your day going? I’d love to help with that!"
+
+    # start timing
+    start_time = time.perf_counter()
+
+    # API to call for speech synthesis
+    audio_stream = await synthesize_speech(text)
+
+    # record finish line
+    audio_stream = list(audio_stream)  # Convert the generator to a list (bad for streaming, but good for timing)
+    duration = time.perf_counter() - start_time
+    print(f"Audio streamed in {duration:.2f} seconds")
+    
+    # Stream audio in a separate thread
+    await asyncio.to_thread(stream, audio_stream)
+        
+
+if __name__ == "__main__":
+    asyncio.run(main())

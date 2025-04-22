@@ -11,6 +11,8 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 
 # VoiceID
 ELEVENLABS_VOICE_ID = "56AoDkrOh6qfVPDXZ7Pt" # Cassidy
+ELEVENLABS_RT_AGENT_ID = "RymawqfeH44NQriMkgGH"
+
 
 # System prompt for the voice assistant
 SYSTEM_PROMPT = (

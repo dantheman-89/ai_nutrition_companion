@@ -20,7 +20,7 @@ ffmpeg-python = "0.2.0"
 torch = { version = "2.5.1", source = "pytorch-cu121" } 
 openai = "^1.75.0"
 python-dotenv = "^1.0.0"
-elevenlabs = "1.56.0"
+elevenlabs = {extras = ["pyaudio"], version = "^1.57.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

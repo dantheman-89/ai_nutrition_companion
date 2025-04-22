@@ -13,7 +13,7 @@ load_duration = time.perf_counter() - start_load
 print(f"Models loaded in {load_duration:.3f} seconds")
 
 # Function to run ASR, LLM, and TTS pipeline
-async def run_pipeline(audio_bytes: bytes):
+async def run_pipeline(audio_bytes: bytes, conversation_history: list):
     # ASR
     print("[🔠] Transcribing...")
     start_asr = time.perf_counter()
@@ -22,16 +22,21 @@ async def run_pipeline(audio_bytes: bytes):
     asr_duration = time.perf_counter() - start_asr
     print(f"ASR completed in {asr_duration:.3f} seconds")
 
+    # Update conversation history with user's input
+    conversation_history.append({"role": "user", "content": transcription})
+
     # LLM        
     print("\n[🤖] Thinking...")
-    history = [{"role": "user", "content": transcription}]
     start_llm = time.perf_counter()
     reply = ""
-    async for token in stream_text_response(history, SYSTEM_PROMPT):
+    async for token in stream_text_response(conversation_history, SYSTEM_PROMPT):
         print(token, end="", flush=True)
         reply += token
     llm_duration = time.perf_counter() - start_llm
     print(f"\nLLM completed in {llm_duration:.3f} seconds")
+
+    # Update conversation history with AI's response
+    conversation_history.append({"role": "assistant", "content": reply})
 
     # TTS
     print("\n[🧠] Synthesizing...")
@@ -45,20 +50,34 @@ async def run_pipeline(audio_bytes: bytes):
     total_duration = time.perf_counter() - start_asr
     print(f"Responded in {total_duration:.3f} seconds")
 
-    # Play audio
+    # Play audio and wait for completion
+    print("\n[🔊] Playing response...")
     await asyncio.to_thread(stream, audio_stream)
+    print("\n[✅] Response complete")
+
+    return conversation_history
 
 async def main():
     from app.utils.audio_record import Recorder
-
-    # Record audio live
-    print("[🎙️] Recording… Press ENTER to stop.")
+    
+    print("Starting conversation... Press Ctrl+C to exit.")
     recorder = Recorder()
-    audio_data = await recorder.record(samplerate=16000, dtype='float32')
+    conversation_history = []  # Initialize conversation history
+    
+    try:
+        while True:
+            # Record audio live
+            print("\n[🎙️] Recording… Press ENTER to stop.")
+            audio_data = await recorder.record(samplerate=16000, dtype='float32')
 
-    # Run the pipeline function
-    await run_pipeline(audio_data)  # Use await instead of asyncio.run()
-
+            # Run the pipeline function and update conversation history
+            conversation_history = await run_pipeline(audio_data, conversation_history)
+            
+            # Small pause to ensure audio playback is complete
+            await asyncio.sleep(0.5)
+            
+    except KeyboardInterrupt:
+        print("\nEnding conversation...")
 
 if __name__ == "__main__":
     # Run the main function directly using asyncio

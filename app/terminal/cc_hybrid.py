@@ -5,9 +5,9 @@ import time
 
 # Load AI models
 start_load = time.perf_counter()
-from app.services.asr import transcribe_audio
-from app.services.llm import stream_text_response
-from app.services.tts import synthesize_speech
+from app.core.asr import transcribe_audio
+from app.core.llm import stream_text_response
+from app.core.tts import synthesize_speech
 
 load_duration = time.perf_counter() - start_load
 print(f"Models loaded in {load_duration:.3f} seconds")
@@ -58,7 +58,7 @@ async def run_pipeline(audio_bytes: bytes, conversation_history: list):
     return conversation_history
 
 async def main():
-    from app.utils.audio_record import Recorder
+    from app.core.audio import Recorder
     
     print("Starting conversation... Press Ctrl+C to exit.")
     recorder = Recorder()

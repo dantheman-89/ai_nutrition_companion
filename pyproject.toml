@@ -11,16 +11,17 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
+python-dotenv = "^1.0.0"
+numpy = "2.2.4"
+ffmpeg-python = "0.2.0"
 fastapi = ">=0.115.12,<0.116.0"
 uvicorn = { version = ">=0.34.0,<0.35.0", extras = ["standard"] }
 jinja2 = ">=3.1.6,<4.0.0"
 faster-whisper = "^1.0.1"
-numpy = "2.2.4"
-ffmpeg-python = "0.2.0"
 torch = { version = "2.5.1", source = "pytorch-cu121" } 
 openai = "^1.75.0"
-python-dotenv = "^1.0.0"
 elevenlabs = {extras = ["pyaudio"], version = "^1.57.0"}
+websocket-client = { version = "^1.8.0"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

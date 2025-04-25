@@ -9,13 +9,13 @@ import base64
 import json
 from pathlib import Path
 import numpy as np
-from app.utils.audio_decode import decode_audio
+from app.core.audio.decode import decode_audio
 
 # Load AI models
 start_load = time.perf_counter()
-from app.services.asr import transcribe_audio
-from app.services.llm import stream_text_response
-from app.services.tts import synthesize_speech
+from app.core.asr import transcribe_audio
+from app.core.llm import stream_text_response
+from app.core.tts import synthesize_speech
 
 load_duration = time.perf_counter() - start_load
 print(f"Models loaded in {load_duration:.3f} seconds")

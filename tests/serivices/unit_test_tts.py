@@ -1,6 +1,6 @@
 import asyncio
 import time
-from app.services.tts import synthesize_speech
+from app.core.tts import synthesize_speech
 
 # Example async consumer.
 async def main():

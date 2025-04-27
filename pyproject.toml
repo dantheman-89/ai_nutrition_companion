@@ -22,11 +22,13 @@ torch = { version = "2.5.1", source = "pytorch-cu121" }
 openai = "^1.75.0"
 elevenlabs = {extras = ["pyaudio"], version = "^1.57.0"}
 websocket-client = { version = "^1.8.0"}
+pydub = { version = "^0.25.1"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 sounddevice = "0.5.1"
 miniaudio = "^1.61"
+ipykernel = "^6.29.5"
 
 [[tool.poetry.source]]
 name = "pytorch-cu121"

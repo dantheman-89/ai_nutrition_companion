@@ -1,25 +1,284 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Nutrition Assistant</title>
-    <link rel="stylesheet" href="/static/styles.css">
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live AI Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="container">
-        <div class="chat-container">
-            <div class="chat-header">
-                <h1>AI Nutrition Assistant</h1>
-                <div id="status" class="status">Disconnected</div>
-            </div>
-            <div class="chat-messages" id="chat-messages"></div>
-            <div class="chat-controls">
-                <button id="toggle-recording" class="record-button">Start Conversation</button>
-                <div id="recording-indicator" class="recording-indicator"></div>
-            </div>
-        </div>
-    </div>
-    <script src="/static/main.js"></script>
+<body class="flex flex-col h-screen">
+  <!-- messages container -->
+  <div id="messages" class="flex-1 overflow-auto p-4 space-y-2 bg-gray-50"></div>
+
+  <!-- input bar -->
+  <div class="p-4 flex border-t">
+    <input
+      id="input"
+      type="text"
+      placeholder="Type a message…"
+      class="flex-1 border rounded px-2 py-1 mr-2"
+    />
+    <button
+      id="send"
+      class="bg-blue-500 text-white rounded px-4 py-1"
+    >
+      Send
+    </button>
+  </div>
+
+  <!-- Debug console (hidden by default) -->
+  <div id="debug" class="p-2 bg-gray-100 text-xs text-gray-600 hidden"></div>
+
+  <script>
+    const messagesDiv = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const sendBtn = document.getElementById("send");
+    const debugEl = document.getElementById("debug");
+
+    // Debug function - set to true to show debug info
+    const DEBUG = false;
+    function debug(msg) {
+      if (!DEBUG) return;
+      console.log(msg);
+      debugEl.classList.remove("hidden");
+      debugEl.textContent += msg + "\n";
+      if (debugEl.textContent.length > 1000) {
+        debugEl.textContent = debugEl.textContent.slice(-1000);
+      }
+    }
+
+    // Advanced audio streaming with precise timing
+    let audioContext;
+    let playTime = 0;
+    let preBuffer = []; // For initial pre-buffering
+    let isAudioStarted = false;
+    
+    // Initialize audio context
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
+    
+    // Convert base64 to ArrayBuffer
+    function base64ToArrayBuffer(base64) {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes.buffer;
+    }
+    
+    // Process audio chunk with precise scheduling
+    async function processAudioChunk(base64Audio) {
+      try {
+        const arrayBuffer = base64ToArrayBuffer(base64Audio);
+        
+        // If we haven't started audio playback yet, prebuffer
+        if (!isAudioStarted) {
+          preBuffer.push(arrayBuffer);
+          
+          // Start playback once we have a few chunks or after a timeout
+          if (preBuffer.length >= 2) {
+            startAudioPlayback();
+          }
+          return;
+        }
+        
+        // Otherwise schedule this chunk to play at the right time
+        await playChunk(arrayBuffer);
+      } catch (err) {
+        debug(`Error processing audio: ${err.message}`);
+      }
+    }
+    
+    // Start playing the prebuffered audio
+    async function startAudioPlayback() {
+      if (isAudioStarted || preBuffer.length === 0) return;
+      
+      isAudioStarted = true;
+      const ctx = getAudioContext();
+      
+      // Start audio 100ms in the future to allow for decoding time
+      playTime = ctx.currentTime + 0.1;
+      
+      debug(`Starting audio playback with ${preBuffer.length} buffered chunks`);
+      
+      // Play all prebuffered chunks
+      for (const buffer of preBuffer) {
+        await playChunk(buffer);
+      }
+      
+      // Clear the prebuffer
+      preBuffer = [];
+    }
+    
+    // Play a chunk at the scheduled time
+    async function playChunk(arrayBuffer) {
+      try {
+        const ctx = getAudioContext();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        
+        // Schedule this buffer to play at the right time
+        source.start(playTime);
+        
+        // Update the next play time
+        playTime += audioBuffer.duration;
+        
+        debug(`Scheduled chunk: duration=${audioBuffer.duration.toFixed(2)}s, next=${playTime.toFixed(2)}s`);
+        
+        return true;
+      } catch (err) {
+        debug(`Error playing chunk: ${err.message}`);
+        return false;
+      }
+    }
+    
+    // Reset the audio system for a new stream
+    function resetAudioSystem() {
+      debug("Resetting audio system");
+      preBuffer = [];
+      isAudioStarted = false;
+      
+      // Only reset playTime if we need to create a new AudioContext
+      if (!audioContext || audioContext.state === 'closed') {
+        playTime = 0;
+      }
+      
+      // Ensure audio context is running
+      const ctx = getAudioContext();
+      if (ctx.state !== 'running') {
+        ctx.resume();
+      }
+    }
+
+    // WebSocket connection
+    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    let lastAiElem = null;
+    let waitingForResponse = false;
+
+    ws.onopen = () => debug("WebSocket connected");
+    ws.onmessage = (e) => {
+      try {
+        // Parse the JSON message
+        const data = JSON.parse(e.data);
+        debug(`Received: ${data.type}`);
+        
+        if (data.type === "text_delta") {
+          // Handle text deltas
+          if (!lastAiElem) return;
+          lastAiElem.textContent += data.content;
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        } 
+        else if (data.type === "audio_chunk") {
+          // Process audio chunk with precise timing
+          debug(`Received audio chunk (${data.audio.length} bytes)`);
+          processAudioChunk(data.audio);
+        }
+        else if (data.type === "audio") {
+          // Legacy support for complete audio file
+          debug(`Received complete audio file (${data.audio.length} bytes)`);
+          processAudioChunk(data.audio);
+        }
+        else if (data.type === "done") {
+          debug("Response complete");
+          waitingForResponse = false;
+          
+          // If we have prebuffered audio that hasn't started yet, start it now
+          if (preBuffer.length > 0 && !isAudioStarted) {
+            startAudioPlayback();
+          }
+        }
+      } catch (err) {
+        // Fallback to plain text handling (should not happen with current setup)
+        debug(`Parsing JSON failed: ${err.message}`);
+        if (lastAiElem) {
+          lastAiElem.textContent += e.data;
+          
+          if (e.data === "\n") {
+            waitingForResponse = false;
+          }
+        }
+      }
+      
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    };
+    
+    ws.onclose = () => debug("WebSocket closed");
+    ws.onerror = (err) => debug(`WebSocket error: ${err.message || "Unknown error"}`);
+
+    // Send message function
+    function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text || waitingForResponse) return;
+      
+      resetAudioSystem();
+      
+      waitingForResponse = true;
+      debug(`Sending: ${text}`);
+      
+      // Initialize audio on first user interaction
+      getAudioContext();
+      
+      // user bubble
+      const userDiv = document.createElement("div");
+      userDiv.className = "self-end bg-blue-100 rounded p-2 max-w-xs";
+      userDiv.textContent = "You: " + text;
+      messagesDiv.appendChild(userDiv);
+
+      // AI bubble placeholder
+      const aiDiv = document.createElement("div");
+      aiDiv.className = "self-start bg-gray-100 rounded p-2 max-w-xs";
+      aiDiv.textContent = "AI: ";
+      messagesDiv.appendChild(aiDiv);
+      lastAiElem = aiDiv;
+
+      // send JSON over WS
+      ws.send(JSON.stringify({ type: "user_message", text }));
+      inputEl.value = "";
+      inputEl.focus();
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Enable audio on page load (needed for some browsers)
+    document.addEventListener("DOMContentLoaded", function() {
+      debug("Page loaded - initializing audio context");
+      // Try to create and resume AudioContext early
+      try {
+        getAudioContext().resume().then(() => {
+          debug("Audio context resumed on page load");
+        });
+      } catch (e) {
+        debug(`Error initializing audio: ${e.message}`);
+      }
+    });
+    
+    // Also enable on first interaction (backup method)
+    document.body.addEventListener("click", () => {
+      debug("User interaction - ensuring audio is enabled");
+      try {
+        getAudioContext().resume().then(() => {
+          debug("Audio context resumed after user interaction");
+        });
+      } catch (e) {
+        debug(`Error initializing audio: ${e.message}`);
+      }
+    }, { once: true });
+  </script>
 </body>
 </html>

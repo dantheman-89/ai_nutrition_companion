@@ -1,15 +1,10 @@
 import os
 import asyncio
-import base64
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse, JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 import pathlib
-from config import SYSTEM_PROMPT
-import numpy as np
-from pydub import AudioSegment
-import io
 
 from openai import AsyncOpenAI
 from openai.types.beta.realtime.session import Session
@@ -38,31 +33,6 @@ app.mount(
 async def root():
     return RedirectResponse(url="/static/index.html")
 
-# Function to convert raw PCM audio to MP3 format for browser compatibility
-async def convert_audio_to_mp3(audio_data: bytes) -> bytes:
-    try:
-        # PCM data from OpenAI is 16-bit, 24kHz, mono
-        if not audio_data:
-            print("Warning: Empty audio data received")
-            return b""
-        
-        # Convert raw PCM to AudioSegment (more concise than manually creating WAV)
-        audio = AudioSegment(
-            data=audio_data,
-            sample_width=2,  # 16-bit
-            frame_rate=24000,  # 24kHz
-            channels=1  # mono
-        )
-        
-        # Export as MP3
-        mp3_io = io.BytesIO()
-        audio.export(mp3_io, format="mp3", bitrate="128k")
-        return mp3_io.getvalue()
-        
-    except Exception as e:
-        print(f"Error converting audio: {e}")
-        return b""
-
 class RealtimeSession:
     """
     Manages the connection to OpenAI's Realtime API and handles the
@@ -72,7 +42,6 @@ class RealtimeSession:
         """Initialize with a WebSocket connection."""
         self.websocket = websocket
         self.connection = None
-        self.last_audio_item_id = None
         
     async def setup_connection(self):
         """Establish and configure the connection to OpenAI's Realtime API."""
@@ -118,46 +87,14 @@ class RealtimeSession:
         try:
             # Stream the response back to the client
             async for event in self.connection:
+                # Debug output
+                print("⟵ event:", event)
+                
                 # Process the event based on its type
-                if event.type == "response.audio.delta":
-                    # Handle audio delta events
-                    bytes_length = len(event.delta) if hasattr(event, 'delta') else 0
-                    print(f"⟵ event: {event.type} (bytes: {bytes_length})")
-                    
-                    try:
-                        # Process and send audio chunk
-                        audio_bytes = base64.b64decode(event.delta)
-                        mp3_data = await convert_audio_to_mp3(audio_bytes)
-                        
-                        if mp3_data and len(mp3_data) > 0:
-                            mp3_base64 = base64.b64encode(mp3_data).decode('utf-8')
-                            await self.websocket.send_json({
-                                "type": "audio_chunk",
-                                "format": "mp3",
-                                "audio": mp3_base64
-                            })
-                    except Exception as e:
-                        print(f"Error processing audio chunk: {e}")
-                
-                elif event.type == "response.audio_transcript.delta":
-                    # Handle transcript delta events
-                    print(f"⟵ event: {event.type}, delta: {event.delta}")
-                    await self.websocket.send_json({
-                        "type": "text_delta",
-                        "content": event.delta
-                    })
-                
+                if event.type == "response.text.delta":
+                    await self.websocket.send_text(event.delta)
                 elif event.type in ("response.text.done", "response.done"):
-                    # Handle completion events
-                    print(f"⟵ event: {event.type}")
-                    await self.websocket.send_json({
-                        "type": "done",
-                        "content": ""
-                    })
-                
-                else:
-                    # Log other event types
-                    print(f"⟵ event: {event}")
+                    await self.websocket.send_text("\n")
                     
         except asyncio.CancelledError:
             print("Send task cancelled")
@@ -178,12 +115,12 @@ async def realtime_ws(ws: WebSocket):
         async with await session.setup_connection() as connection:
             session.connection = connection
             
-            # Configure the session to include audio modality
-            # The correct way to set modalities and audio settings
+            # Configure the session
             await connection.session.update(
                 session=Session(
-                    modalities=["text", "audio"],
-                    instructions=SYSTEM_PROMPT,
+                    modalities=["text"],
+                    instructions="You are a helpful AI assistant.",
+                    temperature=0.8,
                 )
             )
             

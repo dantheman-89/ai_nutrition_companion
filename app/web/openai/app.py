@@ -164,6 +164,19 @@ class RealtimeSession:
         except Exception as e:
             print(f"Error in send_to_client: {e}")
 
+    async def ping_client(self):
+        """Send periodic pings to keep the WebSocket connection alive."""
+        try:
+            while True:
+                await asyncio.sleep(30)  # Send ping every 30 seconds
+                if self.websocket:
+                    await self.websocket.send_json({"type": "ping"})
+        except asyncio.CancelledError:
+            # Expected when task is cancelled
+            pass
+        except Exception as e:
+            print(f"Ping error: {e}")
+
 @app.websocket("/ws")
 async def realtime_ws(ws: WebSocket):
     """
@@ -190,6 +203,7 @@ async def realtime_ws(ws: WebSocket):
             # Create tasks for receiving from client and sending to client
             recv_task = asyncio.create_task(session.recv_from_client())
             send_task = asyncio.create_task(session.send_to_client())
+            ping_task = asyncio.create_task(session.ping_client())
             
             # Wait for either task to complete or an error
             done, pending = await asyncio.wait(

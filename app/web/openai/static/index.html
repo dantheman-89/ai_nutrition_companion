@@ -196,6 +196,11 @@
             startAudioPlayback();
           }
         }
+        else if (data.type === "ping") {
+          // Respond to ping with a pong to keep the connection alive
+          debug("Ping received, sending pong");
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
       } catch (err) {
         // Fallback to plain text handling (should not happen with current setup)
         debug(`Parsing JSON failed: ${err.message}`);

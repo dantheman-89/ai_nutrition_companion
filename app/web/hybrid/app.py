@@ -9,7 +9,7 @@ import base64
 import json
 from pathlib import Path
 import numpy as np
-from app.core.audio.decode import decode_audio
+from app.core.audio.convert import decode_audio
 
 # Load AI models
 start_load = time.perf_counter()

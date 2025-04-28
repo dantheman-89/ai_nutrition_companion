@@ -33,7 +33,8 @@
     const sendBtn = document.getElementById("send");
 
     // 1) open WS to your FastAPI /ws
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     let lastAiElem = null;
     let waitingForResponse = false;
 

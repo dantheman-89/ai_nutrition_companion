@@ -244,11 +244,6 @@ async def realtime_ws(ws: WebSocket):
                     print("Server send task completed early") 
                 elif task == ping_task:
                     print("Ping task completed early")
-                
-                # Print exception if task failed with an error
-                if task.exception():
-                    print(f"Task failed with exception: {task.exception()}")
-            
         
             # Cancel all pending tasks
             for task in pending:

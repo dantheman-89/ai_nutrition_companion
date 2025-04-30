@@ -2,6 +2,9 @@ import asyncio
 import base64
 import json
 import pathlib
+import logging
+import io
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
@@ -41,7 +44,68 @@ class RealtimeSession:
         self.websocket = websocket
         self.connection = None
         self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        
+
+    async def send_voice_intro(self, intro_text: str):
+        """Generates TTS audio, sends it, adds text to history, and sends text delta + done."""
+        print(f"Generating voice intro: '{intro_text}'")
+        try:
+            # 1. Generate speech using TTS API
+            response = await self.client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=intro_text,
+                response_format="mp3"
+            )
+
+            # 2. Read the entire audio content
+            audio_content = response.read()
+            print(f"Generated intro audio size: {len(audio_content)} bytes")
+
+            # 3. Base64 encode the entire content
+            mp3_base64 = base64.b64encode(audio_content).decode('utf-8')
+
+            # 4. Send the entire audio file in one message
+            print("Sending entire intro audio file...")
+            await self.websocket.send_json({
+                "type": "audio_chunk",
+                "format": "mp3",
+                "audio": mp3_base64 # Send full base64 string
+            })
+
+            # 5. Add the intro text to the conversation history as the assistant
+            print("Adding intro text to conversation history (role: assistant)")
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": intro_text}
+                    ],
+                }
+            )
+
+            # 6. Send the text message for display using text_delta and text_done
+            print(f"Sending AI intro text delta for display: {intro_text}")
+            await self.websocket.send_json({
+                "type": "text_delta",
+                "content": intro_text
+            })
+            print("Sending AI intro text_done")
+            await self.websocket.send_json({
+                "type": "text_done"
+            })
+
+        except Exception as tts_error:
+            print(f"Error generating or sending TTS intro: {tts_error}")
+            # Fallback: Send only text delta + done if TTS fails
+            await self.websocket.send_json({
+                "type": "text_delta",
+                "content": intro_text + " (Audio intro failed)"
+            })
+            await self.websocket.send_json({
+                "type": "text_done"
+            })
+
     async def handle_client_events(self):
         """
         Listen for messages from the client and process them.
@@ -59,6 +123,7 @@ class RealtimeSession:
                         text = data.get("text", "")
                         
                         if msg_type == "user_message" and text != "":                           
+
                             # Send text message to OpenAI
                             await self.connection.conversation.item.create(
                                 item={
@@ -118,8 +183,9 @@ class RealtimeSession:
                     try:
                         # Process and send audio chunk
                         audio_bytes = base64.b64decode(event.delta)
+                        # Assuming convert_audio_to_mp3 handles potential partial chunks if needed
                         mp3_data = await convert_audio_to_mp3(audio_bytes)
-                        
+
                         if mp3_data and len(mp3_data) > 0:
                             mp3_base64 = base64.b64encode(mp3_data).decode('utf-8')
                             await self.websocket.send_json({
@@ -127,6 +193,8 @@ class RealtimeSession:
                                 "format": "mp3",
                                 "audio": mp3_base64
                             })
+                            # Add similar sleep here for consistency
+                            await asyncio.sleep(0.025) # Prevent overwhelming client
                     except Exception as e:
                         print(f"Error processing audio chunk: {e}")
                 
@@ -160,11 +228,18 @@ class RealtimeSession:
                     await self.websocket.send_json({
                         "type": "input_audio_transcript_done"
                     })
-                
+
+                # --- Add this block ---
+                elif event.type == "input_audio_buffer.committed":
+                    print(f"⟵ event: {event.type}")
+                    await self.websocket.send_json({
+                        "type": "input_audio_buffer_committed"
+                    })
+                # --- End added block ---
+
                 elif event.type in ("session.created",
                                     "input_audio_buffer.speech_started",
                                     "input_audio_buffer.speech_stopped",
-                                    "input_audio_buffer.committed",
                                     "conversation.item.created",                                    
                                     "rate_limits.updated",
                                     "response.created",
@@ -204,43 +279,47 @@ async def realtime_ws(ws: WebSocket):
     """
     await ws.accept()
     print("WebSocket connection accepted")
-    
+
     try:
         # Start an OpenAI session
         session = RealtimeSession(ws)
 
-        # Get the connection manager and use it with async with 
+        # Get the connection manager and use it with async with
         async with session.client.beta.realtime.connect(model=MODEL) as connection:
             session.connection = connection
             print("OpenAI Realtime connection established")
-            
-            # Configure the session to include audio modality and server VAD
+
+            # Configure the session
             await connection.session.update(
                 session=Session(
                     modalities=["text", "audio"],
                     instructions=SYSTEM_PROMPT,
                     input_audio_noise_reduction=InputAudioNoiseReduction(type="near_field"),
                     input_audio_transcription=InputAudioTranscription(
-                        language="en",  # ISO-639-1 language code, Chinese for zh or zh-CN
-                        model="gpt-4o-mini-transcribe",  # Or "whisper-1" or "gpt-4o-mini-transcribe"
-                        prompt="Expect technical terms related to nutrition" # Optional guidance
+                        language="en",
+                        model="gpt-4o-mini-transcribe",
+                        prompt="Expect technical terms related to nutrition"
                     ),
-                    turn_detection={"type": "server_vad"},  # Enable server-side VAD,
-                    max_response_output_tokens=120
+                    turn_detection={"type": "semantic_vad", "eagerness": "medium"},
+                    max_response_output_tokens=1024
                 )
             )
             print("Session configured with server-side VAD")
-            
-            # Create tasks for receiving from client, sending to client, and ping
+
+            # --- Call the voice intro method ---
+            await session.send_voice_intro("Hey there 👋 I’m here to support you on your nutrition journey; no judgment, no lectures, just helpful ideas.")
+            # --- End call ---
+
+            # Create tasks for handling events
             client_task = asyncio.create_task(session.handle_client_events())
             openai_task = asyncio.create_task(session.handle_openai_events())
-            
-            # Wait for any task to complete
+
+            # Wait for tasks
             done, pending = await asyncio.wait(
                 [client_task, openai_task],
                 return_when=asyncio.FIRST_COMPLETED
             )
-            
+
             # Print which task completed first
             for task in done:
                 if task == client_task:

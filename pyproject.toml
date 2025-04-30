@@ -18,18 +18,35 @@ fastapi = ">=0.115.12,<0.116.0"
 uvicorn = { version = ">=0.34.0,<0.35.0", extras = ["standard"] }
 jinja2 = ">=3.1.6,<4.0.0"
 faster-whisper = "^1.0.1"
-torch = "2.5.1"  # Standard PyPI version (CPU-only)
 openai = "^1.75.0"
-elevenlabs = "^1.57.0"  # Without pyaudio extra
 websocket-client = "^1.8.0"
 pydub = { version = "^0.25.1"}
-pyaudio = "^0.2.13"  # Separate dependency
+
+# Platform-specific dependencies using markers
+torch = [
+    { version = "2.5.1", source = "pytorch-cu121", markers = "sys_platform == 'win32'" },
+    { version = "2.5.1", markers = "sys_platform == 'linux'" }
+]
+elevenlabs = [
+    { version = "^1.57.0", markers = "sys_platform == 'win32'" },  # Removed pyaudio extra
+    { version = "^1.57.0", markers = "sys_platform == 'linux'" }
+]
+pyaudio = [
+    { version = "^0.2.14", markers = "sys_platform == 'win32'" },
+    { version = "^0.2.13", markers = "sys_platform == 'linux'" }
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 sounddevice = "0.5.1"
 miniaudio = "^1.61"
 ipykernel = "^6.29.5"
+
+# Define custom source for PyTorch with CUDA
+[[tool.poetry.source]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core>=1.5.0"]

@@ -2,22 +2,19 @@ import asyncio
 import base64
 import json
 import pathlib
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
-
+from fastapi.responses import RedirectResponse, FileResponse
 from openai import AsyncOpenAI
-from openai.types.beta.realtime.session import Session
-from config import SYSTEM_PROMPT, OPENAI_API_KEY
+from openai.types.beta.realtime.session import Session, InputAudioNoiseReduction, InputAudioTranscription
 
 from app.core.audio.convert import convert_audio_to_mp3
+from config import SYSTEM_PROMPT, OPENAI_API_KEY
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Setup OpenAPI client
+# OpenAPI model select
 # ─────────────────────────────────────────────────────────────────────────────
-MODEL = "gpt-4o-realtime-preview"
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+MODEL = "gpt-4o-mini-realtime-preview"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup FastAPI app
@@ -34,7 +31,6 @@ app.mount(
 async def root():
     return RedirectResponse(url="/static/index.html")
 
-
 class RealtimeSession:
     """
     Manages the connection to OpenAI's Realtime API and handles the
@@ -44,31 +40,8 @@ class RealtimeSession:
         """Initialize with a WebSocket connection."""
         self.websocket = websocket
         self.connection = None
-        self.ping_task = None
-        # Add these for debugging
-        self.audio_chunks = []
-        self.recording_start_time = None
-        self.debug_save_timer = None
+        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         
-    async def setup_connection(self):
-        """Establish and configure the connection to OpenAI's Realtime API."""
-        # Return the connection manager to be used with async with
-        return client.beta.realtime.connect(model=MODEL)
-    
-    async def ping_client(self):
-        """Send periodic pings to keep the WebSocket connection alive."""
-        try:
-            while True:
-                await asyncio.sleep(30)  # Send ping every 30 seconds
-                if self.websocket:
-                    await self.websocket.send_json({"type": "ping"})
-        except asyncio.CancelledError:
-            # Expected when task is cancelled
-            pass
-        except Exception as e:
-            print(f"Ping error: {e}")
-    
-
     async def handle_client_events(self):
         """
         Listen for messages from the client and process them.
@@ -103,8 +76,7 @@ class RealtimeSession:
                         print(f"Invalid JSON received")
                 
                 elif "bytes" in msg:
-                    # Process audio bytes from client - no need to check recording state
-                    # since client only sends bytes when recording is active
+                    # Process audio bytes from client
                     try:
                         # Get raw audio bytes already in pcm16 format
                         audio_bytes = msg["bytes"]
@@ -136,6 +108,8 @@ class RealtimeSession:
             # Stream the response back to the client
             async for event in self.connection:
                 # Process the event based on its type
+
+                # process response audio data
                 if event.type == "response.audio.delta":
                     # Handle audio delta events
                     bytes_length = len(event.delta) if hasattr(event, 'delta') else 0
@@ -156,29 +130,53 @@ class RealtimeSession:
                     except Exception as e:
                         print(f"Error processing audio chunk: {e}")
                 
-                elif event.type == "response.audio_transcript.delta":
-                    # Handle transcript delta events
+                # response transcript/text delta
+                elif event.type in ("response.audio_transcript.delta", 
+                                    "response.text.delta"):
                     print(f"⟵ event: {event.type}, delta: {event.delta}")
                     await self.websocket.send_json({
                         "type": "text_delta",
                         "content": event.delta
                     })
                 
-                elif event.type == "response.text.delta":
-                    # Handle text delta events
+                # response transcript/text completed
+                elif event.type in ("response.audio_transcript.done"):
+                    print(f"⟵ event: {event.type}, : {event.transcript}")
+                    await self.websocket.send_json({
+                        "type": "text_done"
+                    })
+
+                # input transcript delta
+                elif event.type in ("conversation.item.input_audio_transcription.delta"):
                     print(f"⟵ event: {event.type}, delta: {event.delta}")
                     await self.websocket.send_json({
-                        "type": "text_delta",
+                        "type": "input_audio_transcript_delta",
                         "content": event.delta
                     })
                 
-                elif event.type in ("response.text.done", "response.done", "response.audio.done", "response.audio_transcript.done"):
-                    # Handle completion events
+                 # input transcript completed
+                elif event.type == "conversation.item.input_audio_transcription.completed":
+                    print(f"⟵ event: {event.type}, : {event.transcript}")
+                    await self.websocket.send_json({
+                        "type": "input_audio_transcript_done"
+                    })
+                
+                elif event.type in ("session.created",
+                                    "input_audio_buffer.speech_started",
+                                    "input_audio_buffer.speech_stopped",
+                                    "input_audio_buffer.committed",
+                                    "conversation.item.created",                                    
+                                    "rate_limits.updated",
+                                    "response.created",
+                                    "response.output_item.added",
+                                    "response.output_item.done",
+                                    "response.content_part.added",
+                                    "response.content_part.done",
+                                    "response.audio.done",
+                                    "response.done"
+                                    ):
+                    # print events without action required
                     print(f"⟵ event: {event.type}")
-                    await self.websocket.send_json({
-                        "type": "done",
-                        "content": ""
-                    })
 
                 elif event.type == "error":
                     # Handle error events
@@ -207,11 +205,12 @@ async def realtime_ws(ws: WebSocket):
     await ws.accept()
     print("WebSocket connection accepted")
     
-    session = RealtimeSession(ws)
-    
     try:
-        # Get the connection manager and use it with async with
-        async with await session.setup_connection() as connection:
+        # Start an OpenAI session
+        session = RealtimeSession(ws)
+
+        # Get the connection manager and use it with async with 
+        async with session.client.beta.realtime.connect(model=MODEL) as connection:
             session.connection = connection
             print("OpenAI Realtime connection established")
             
@@ -220,30 +219,34 @@ async def realtime_ws(ws: WebSocket):
                 session=Session(
                     modalities=["text", "audio"],
                     instructions=SYSTEM_PROMPT,
-                    turn_detection={"type": "server_vad"}  # Enable server-side VAD
+                    input_audio_noise_reduction=InputAudioNoiseReduction(type="near_field"),
+                    input_audio_transcription=InputAudioTranscription(
+                        language="en",  # ISO-639-1 language code, Chinese for zh or zh-CN
+                        model="gpt-4o-mini-transcribe",  # Or "whisper-1" or "gpt-4o-mini-transcribe"
+                        prompt="Expect technical terms related to nutrition" # Optional guidance
+                    ),
+                    turn_detection={"type": "server_vad"},  # Enable server-side VAD,
+                    max_response_output_tokens=120
                 )
             )
             print("Session configured with server-side VAD")
             
             # Create tasks for receiving from client, sending to client, and ping
-            recv_task = asyncio.create_task(session.handle_client_events())
-            send_task = asyncio.create_task(session.handle_openai_events())
-            ping_task = asyncio.create_task(session.ping_client())
+            client_task = asyncio.create_task(session.handle_client_events())
+            openai_task = asyncio.create_task(session.handle_openai_events())
             
             # Wait for any task to complete
             done, pending = await asyncio.wait(
-                [recv_task, send_task, ping_task],
+                [client_task, openai_task],
                 return_when=asyncio.FIRST_COMPLETED
             )
             
             # Print which task completed first
             for task in done:
-                if task == recv_task:
-                    print("Client receive task completed early")
-                elif task == send_task:
-                    print("Server send task completed early") 
-                elif task == ping_task:
-                    print("Ping task completed early")
+                if task == client_task:
+                    print("client task completed early")
+                elif task == openai_task:
+                    print("OpenAI task completed early") 
         
             # Cancel all pending tasks
             for task in pending:

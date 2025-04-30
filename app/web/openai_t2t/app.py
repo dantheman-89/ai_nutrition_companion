@@ -1,22 +1,15 @@
 import os
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import PlainTextResponse, JSONResponse, RedirectResponse
-from dotenv import load_dotenv
+from fastapi.responses import  RedirectResponse
 import pathlib
 
 from openai import AsyncOpenAI
 from openai.types.beta.realtime.session import Session
-from openai.resources.beta.realtime.realtime import AsyncRealtimeConnection
+from config import OPENAI_API_KEY
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Setup OpenAPI client
-# ─────────────────────────────────────────────────────────────────────────────
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL = "gpt-4o-realtime-preview"
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup FastAPI app
@@ -42,11 +35,12 @@ class RealtimeSession:
         """Initialize with a WebSocket connection."""
         self.websocket = websocket
         self.connection = None
+        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         
     async def setup_connection(self):
         """Establish and configure the connection to OpenAI's Realtime API."""
         # Return the connection manager to be used with async with
-        return client.beta.realtime.connect(model=MODEL)
+        return self.client.beta.realtime.connect(model=MODEL)
     
     async def recv_from_client(self):
         """
@@ -101,22 +95,6 @@ class RealtimeSession:
         except Exception as e:
             print(f"Error in send_to_client: {e}")
 
-    async def keep_alive(self, interval):
-        """Send periodic keep-alive messages to prevent connection timeout."""
-        try:
-            while True:
-                await asyncio.sleep(interval)  # Send a ping every 5 seconds
-                # Non-disruptive ping to OpenAI
-                await self.connection.conversation.item.create(
-                    item={
-                        "type": "ping"
-                    }
-                )
-        except asyncio.CancelledError:
-            print("Keep-alive task cancelled")
-        except Exception as e:
-            print(f"Error in keep_alive: {e}")
-
 @app.websocket("/ws")
 async def realtime_ws(ws: WebSocket):
     """
@@ -144,32 +122,26 @@ async def realtime_ws(ws: WebSocket):
             recv_task = asyncio.create_task(session.recv_from_client())
             send_task = asyncio.create_task(session.send_to_client())
             
-            await send_task
-            print('send_task completed')
-
-            await recv_task
-            print('recv_task completed')
-
             # Wait for either task to complete or an error
-            # done, pending = await asyncio.wait(
-            #     [recv_task, send_task, keep_alive_task],
-            #     return_when=asyncio.FIRST_COMPLETED
-            # )
+            done, pending = await asyncio.wait(
+                [recv_task, send_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
 
-            #  # Print which task completed first
-            # for task in done:
-            #     if task == recv_task:
-            #         print("Client receive task completed early")
-            #     elif task == send_task:
-            #         print("OpenAI event listen and send task completed early") 
+             # Print which task completed first
+            for task in done:
+                if task == recv_task:
+                    print("Client task completed early")
+                elif task == send_task:
+                    print("OpenAI connection completed early") 
 
-            # # Cancel pending tasks
-            # for task in pending:
-            #     task.cancel()
-            #     try:
-            #         await task
-            #     except asyncio.CancelledError:
-            #         pass
+            # Cancel pending tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
     
     except Exception as e:
         print(f"WebSocket error: {e}")

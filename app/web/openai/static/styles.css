@@ -1,0 +1,6 @@
+/* 
+This file is for custom CSS rules.
+Tailwind CSS is currently loaded via CDN in index.html,
+so this file is primarily for styles not covered by Tailwind utilities
+or for overriding default styles if needed.
+*/

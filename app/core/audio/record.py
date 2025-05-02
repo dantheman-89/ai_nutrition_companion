@@ -72,3 +72,50 @@ class Recorder:
             else:
                 wf.writeframes(pcm.tobytes())
         return buf.getvalue()
+    
+
+
+# debug record and save chunks
+import os
+import datetime
+import pickle
+
+def save_debug_audio_chunks(audio_chunks):
+        """Save the collected audio chunks to a pickle file for later analysis."""
+        try:
+            if not audio_chunks:
+                print("No audio chunks to save")
+                return
+                
+            # Create debug directory if it doesn't exist
+            debug_dir = os.path.join(os.path.dirname(__file__), "debug_audio")
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            # Create a timestamped filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(debug_dir, f"audio_chunks_{timestamp}.pkl")
+            
+            # Save audio chunks along with metadata
+            debug_data = {
+                "chunks": audio_chunks,
+                "num_chunks": len(audio_chunks),
+                "total_bytes": sum(len(chunk) for chunk in audio_chunks),
+                "timestamp": timestamp,
+                "chunk_sizes": [len(chunk) for chunk in audio_chunks]
+            }
+            
+            # Pickle the data
+            with open(filepath, "wb") as f:
+                pickle.dump(debug_data, f)
+                
+            print(f"Saved {len(audio_chunks)} audio chunks to {filepath}")
+            print(f"Total size: {debug_data['total_bytes']} bytes")
+            print(f"Individual chunk sizes: {debug_data['chunk_sizes']}")
+            
+            # Reset the chunks list
+            audio_chunks = []
+            
+        except Exception as e:
+            print(f"Error saving debug audio: {e}")
+            import traceback
+            traceback.print_exc()

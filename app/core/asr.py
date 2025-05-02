@@ -27,7 +27,7 @@ async def transcribe_audio(
 
 async def main():
     # import additional libraries
-    from app.utils.audio_record import Recorder
+    from app.core.audio import Recorder
     import time
 
     # record audio live

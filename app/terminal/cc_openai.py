@@ -8,7 +8,7 @@ import io
 import wave
 from typing import Literal
 from config import OPENAI_API_KEY, SYSTEM_PROMPT
-from app.utils.audio_record import Recorder
+from app.core.audio import Recorder
 
 # Configure OpenAI API key
 openai.api_key = OPENAI_API_KEY

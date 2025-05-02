@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nutrition AI Prototype</title>
+  <style>
+    :root {
+      --pingan: #FD5F21;
+      --vg:     #F41C5E;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { 
+      width: 100%; 
+      height: 100%; 
+      font-family: sans-serif; 
+      background: #f2f2f2; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center;
+    }
+
+    /* Phone-like frame */
+    .phone-frame {
+      width: 360px;
+      /* you can change to height: auto; if you want it to expand */
+      height: 640px;
+      border: 1px solid #ddd;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      background: #f2f2f2;
+      position: relative;
+    }
+
+    /* Deck container fills the frame */
+    .phone-frame .deck {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Shared card styles */
+    .card {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Chat card: up by default */
+    #chatCard {
+      top: 0; left: 0;
+      transform: translateY(0%);
+    }
+    /* Insights card: peek at bottom */
+    #insightsCard {
+      bottom: 0; left: 0;
+      transform: translateY(70%);
+    }
+
+    /* Peek bars */
+    .peek {
+      padding: 12px;
+      text-align: center;
+      background: #efefef;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .bubbles {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .bubble {
+      max-width: 75%;
+      margin-bottom: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      line-height: 1.4;
+    }
+    .bubble.user { background: #f0f0f0; align-self: flex-end; }
+    .bubble.ai   { background: #ffecec; align-self: flex-start; }
+
+    /* Floating Mic Button */
+    #micButton {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px; height: 60px;
+      border: none; border-radius: 50%;
+      background: linear-gradient(135deg, var(--pingan), var(--vg));
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      color: white;
+      font-size: 24px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(244,28,94, 0.7); }
+      70%  { box-shadow: 0 0 0 20px rgba(244,28,94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(244,28,94, 0); }
+    }
+
+    /* Text toggle icon */
+    #textToggle {
+      position: absolute;
+      top: 12px; right: 16px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    /* Optional: two-column desktop split if you add class "desktop-split" to body */
+    @media (min-width: 800px) {
+      .desktop-split body {
+        display: flex !important;
+      }
+      .desktop-split .phone-frame {
+        display: flex;
+        width: 800px;
+        height: 100vh;
+      }
+      .desktop-split #chatCard,
+      .desktop-split #insightsCard {
+        position: relative;
+        width: 50%;
+        transform: translateY(0) !important;
+      }
+      .desktop-split .peek { display: none; }
+      .desktop-split #micButton {
+        left: calc(25% - 30px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- To activate side-by-side on wide screens, add class="desktop-split" on the <html> or <body> element -->
+  <div class="phone-frame">
+    <div class="deck">
+      <!-- Chat Card -->
+      <div class="card" id="chatCard">
+        <div id="textToggle">⌨️</div>
+        <div class="bubbles">
+          <div class="bubble ai">Hi there! What did you eat today?</div>
+          <div class="bubble user">I had oatmeal and berries.</div>
+        </div>
+        <div class="peek" id="showInsights">Show Insights ⬆️</div>
+      </div>
+
+      <!-- Insights Card -->
+      <div class="card" id="insightsCard">
+        <div class="peek" id="showChat">⬇️ Back to Chat</div>
+        <div class="bubbles">
+          <div class="bubble ai">
+            <strong>Oatmeal + Berries</strong><br/>
+            Calories: 320 kcal<br/>
+            Carbs: 55g • Protein: 8g • Fat: 5g
+          </div>
+          <div class="bubble ai">
+            Tip: Add a handful of nuts for healthy fats!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="micButton">🎙️</button>
+  </div>
+
+  <script>
+    const chatCard     = document.getElementById('chatCard');
+    const insightsCard = document.getElementById('insightsCard');
+    document.getElementById('showInsights').onclick = () => {
+      chatCard.style.transform     = 'translateY(70%)';
+      insightsCard.style.transform = 'translateY(0%)';
+    };
+    document.getElementById('showChat').onclick = () => {
+      chatCard.style.transform     = 'translateY(0%)';
+      insightsCard.style.transform = 'translateY(70%)';
+    };
+    // TODO: wire up #micButton to start/stop voice & #textToggle to show text input
+  </script>
+</body>
+</html>

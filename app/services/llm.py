@@ -1,6 +1,6 @@
 import asyncio
 from openai import AsyncOpenAI
-from config import OPENAI_API_KEY, SYSTEM_PROMPT
+from config import OPENAI_API_KEY, SYSTEM_PROMPT, LINKAI_API_KEY
 
 # Instantiate a client with API key.
 client = AsyncOpenAI(
@@ -23,7 +23,39 @@ async def stream_text_response(messages, systemprompt):
             text = event.delta
             if text:
                 yield text
-       
+
+# # 使用代理API创建客户端
+# client = AsyncOpenAI(
+#     api_key=LINKAI_API_KEY,
+#     base_url="https://api.link-ai.chat/v1"  # 替换为你的代理API URL
+# )
+
+# # 异步流式响应函数
+# async def stream_text_response(messages, systemprompt):
+#     # 转换消息格式
+#     formatted_messages = []
+#     for msg in messages:
+#         formatted_messages.append({
+#             "role": msg["role"],
+#             "content": msg["content"]
+#         })
+    
+#     # 添加系统提示
+#     if formatted_messages and formatted_messages[0]["role"] != "system":
+#         formatted_messages.insert(0, {"role": "system", "content": systemprompt})
+    
+#     # 使用代理API流式调用
+#     response = await client.chat.completions.create(
+#         model="gpt-4.1-nano",
+#         messages=formatted_messages,
+#         stream=True,
+#     )
+
+#     async for chunk in response:
+#         if chunk.choices[0].delta.content is not None:
+#             yield chunk.choices[0].delta.content
+
+
 # ─── Example usage ─────────────────────────────────────────────────────────────
 
 async def main():

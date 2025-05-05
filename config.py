@@ -7,7 +7,15 @@ load_dotenv()
 
 # Retrieve your API key (it will be None if not set)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+LINKAI_API_KEY = os.getenv("LINKAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+
+# Gmail Information
+# Gmail开启SMTP参考https://www.cnblogs.com/jiyuwu/p/16313476.html
+SMTP_SERVER = os.getenv("SMTP_SERVER")  ## e.g. smtp.gmail.com
+SMTP_PORT = os.getenv("SMTP_PORT")  ## 587
+SMTP_USERNAME = os.getenv("SMTP_USERNAME") ## xxxxxxxxx@gmail.com
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") ## abcd efgh ijkl mnop
 
 # VoiceID
 ELEVENLABS_VOICE_ID = "56AoDkrOh6qfVPDXZ7Pt" # Cassidy

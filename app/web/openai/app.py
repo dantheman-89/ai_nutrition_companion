@@ -4,8 +4,8 @@ import json
 import pathlib
 import logging
 import io
-import traceback # Add this import
-from datetime import datetime # Add this import
+import traceback 
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +15,8 @@ from openai.types.beta.realtime.session import Session, InputAudioNoiseReduction
 
 from app.core.audio.convert import convert_audio_to_mp3
 from config import SYSTEM_PROMPT, OPENAI_API_KEY
+from app.web.openai.tools import PROFILE_TOOL_DEFINITION, update_profile_json, LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap, CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets
+from app.web.openai.tools import USER_PROFILE_FILENAME
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OpenAPI inputs
@@ -22,37 +24,6 @@ from config import SYSTEM_PROMPT, OPENAI_API_KEY
 MODEL = "gpt-4o-mini-realtime-preview"
 
 DATA_DIR = pathlib.Path(__file__).parent / "data"
-
-PROFILE_TOOL_DEFINITION = {
-    "type": "function",
-    "name": "update_user_profile",
-    "description": "record height, weight, BMI, target weight, culture, food preferences, allergies, or eating habits",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "height":        {"type": "number", "description": "User height in cm"},
-            "weight":        {"type": "number", "description": "User weight in kg"},
-            "target_weight": {"type": "number", "description": "Goal weight in kg"},
-            "culture":       {"type": "string"},
-            "food_preferences": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "E.g. ['vegetarian', 'lactose-free']"
-            },
-            "allergies": {
-            "type": "array",
-            "items": {"type": "string"}
-            },
-            "eating_habits": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description":"E.g. ['breakfast-skipper','late dinner']"
-            }
-        },
-        "required": [], # Make all fields optional for partial updates
-        "additionalProperties": False
-    }
-}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup FastAPI app
@@ -82,48 +53,39 @@ class RealtimeSession:
         self.websocket = websocket
         self.connection = None
         self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-        self.user_id = None
-        self.user_profile = DATA_DIR / "user_profile.json"
+        self.user_id = "test_user"
+        self.user_data_dir = DATA_DIR / self.user_id
 
     async def load_user(self, user_id: str):
-        """Load user profile path. The file will be created on first update if needed."""
-        if user_id == "new":
-            # Use a generic profile for 'new' user (test mode)
-            self.user_profile = DATA_DIR / "user_profile.json"
-            print(f"Using generic profile: {self.user_profile}")
-            # Ensure the generic profile exists and is empty for a new session
+        """
+        Load user profile path. For test_user, refresh the profile from the template.
+        For other users, just set up the correct path.
+        """
+        if user_id == "test_user":
+            # Refresh test user profile from template
             try:
-                with open(self.user_profile, 'w') as f:
-                    json.dump({}, f)
+                template_path = pathlib.Path(__file__).parent / "data" / "user_profile_template.json"
+                self.user_data_dir = DATA_DIR / self.user_id
+                
+                # Ensure directory exists
+                self.user_data_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Read the template file
+                with open(template_path, 'r') as template_file:
+                    template_data = json.load(template_file)
+                    
+                # Write template data to the user profile
+                with open(self.user_data_dir / USER_PROFILE_FILENAME, 'w') as profile_file:
+                    json.dump(template_data, profile_file, indent=2)
+                    
+                print(f"Test user profile refreshed from template")
             except Exception as e:
-                 print(f"Error resetting generic profile {self.user_profile}: {e}")
+                print(f"Error refreshing test user profile: {e}")
+                traceback.print_exc()
         else:
             self.user_id = user_id
-            self.user_profile = DATA_DIR / f"user_profile_{user_id}.json"
+            self.user_data_dir = DATA_DIR / self.user_id
           
-    async def update_profile_json(self, fields_to_update: dict):
-        """Reads, updates, and writes the user profile JSON file."""
-        profile_data = {}
-        try:
-            if self.user_profile.exists():
-                with open(self.user_profile, 'r') as f:
-                    profile_data = json.load(f)
-            
-            # Update the profile with new fields
-            profile_data.update(fields_to_update)
-
-            # Write back to the file
-            with open(self.user_profile, 'w') as f:
-                json.dump(profile_data, f, indent=2)
-            print(f"Updated profile: {fields_to_update}")
-            # Optionally send confirmation back to client/LLM if needed
-            # await self.websocket.send_json({"type": "profile_updated", "data": fields_to_update})
-
-        except Exception as e:
-            print(f"Error updating profile JSON: {e}")
-            # Optionally notify client/LLM of error
-            # await self.websocket.send_json({"type": "profile_update_error", "message": str(e)})
-
     async def send_voice_intro(self, intro_text: str):
         """Generates TTS audio, sends it, adds text to history, and sends text delta + done."""
         print(f"Generating voice intro: '{intro_text}'")
@@ -316,36 +278,68 @@ class RealtimeSession:
                         "type": "input_audio_buffer_committed"
                     })
 
+              # respond to function call
                 elif event.type == "response.function_call_arguments.done":
                     print(f"⟵ event ({current_time}): {event.type}, call_id: {event.call_id}, name: {event.name}, arguments: {event.arguments}") # Modified print
-
-                    # --- Respond only when the function call is done ---
-                    if event.name == "update_user_profile":
-                        try:
+                    
+                    _output = None
+                    try:
+                        # --- Respond based on the function name ---
+                        if event.name == "update_user_profile":
                             # Call the helper function to update the profile
-                            await self.update_profile_json(json.loads(event.arguments))
-
-        
-                        except Exception as e:
-                            print(f"Error executing function call 'update_user_profile': {e}")
-                            traceback.print_exc() # Print full traceback for debugging
-
-                        # --- Send the result back to OpenAI ---
-                        try:
+                            _output = await update_profile_json(
+                                user_data_dir=self.user_data_dir, 
+                                fields_to_update=json.loads(event.arguments)
+                            )
+                            
+                        elif event.name == "load_vitality_data":
+                            # Call the helper function to load health data
+                            _output = await load_vitality_data(
+                                user_data_dir=self.user_data_dir
+                            )
+                            
+                        elif event.name == "calculate_daily_nutrition_targets":
+                            # Calculate nutrition targets based on profile data
+                            _output = await calculate_daily_nutrition_targets(
+                                user_data_dir=self.user_data_dir
+                            )
+                            
+                        elif event.name == "load_healthy_swap":
+                            # Load healthy swap data
+                            _output = await load_healthy_swap(
+                                user_data_dir=self.user_data_dir
+                            )
+                            
+                        else:
+                            _output = json.dumps({
+                                "status": "error", 
+                                "message": f"Unknown function: {event.name}"
+                            })
+                            print(f"Unknown function called: {event.name}")
+                            
+                    except Exception as e:
+                        error_message = f"Error executing function call '{event.name}': {e}"
+                        print(error_message)
+                        traceback.print_exc() # Print full traceback for debugging
+                        _output = json.dumps({"status": "error", "message": error_message})
+                        
+                    # --- Send the result back to OpenAI ---
+                    try:
+                        if _output is not None:  # Ensure we have an output to send
                             await self.connection.conversation.item.create(
                                 item={
                                     "type": "function_call_output",
                                     "call_id": event.call_id,
-                                    "output": "status: success"
+                                    "output": _output
                                 }
                             )
                             # Generate a response
                             await self.connection.response.create()
+                    except Exception as send_error:
+                        print(f"Error sending tool result back to OpenAI: {send_error}")
+                        traceback.print_exc() # Print full traceback for debugging
 
-                        except Exception as send_error:
-                                print(f"Error sending tool result back to OpenAI: {send_error}")
-                                traceback.print_exc()
-
+                # events without action required
                 elif event.type in ("session.created",
                                     "input_audio_buffer.speech_started",
                                     "input_audio_buffer.speech_stopped",
@@ -412,14 +406,14 @@ async def realtime_ws(ws: WebSocket):
                     ),
                     turn_detection={"type": "semantic_vad", "eagerness": "medium"},
                     max_response_output_tokens=1024,
-                    tools=[PROFILE_TOOL_DEFINITION],
+                    tools=[PROFILE_TOOL_DEFINITION, LOAD_VITALITY_DATA_TOOL_DEFINITION, CALCULATE_TARGETS_TOOL_DEFINITION, LOAD_HEALTHY_SWAP_TOOL_DEFINITION],
                     tool_choice="auto"
                 )
             )
             print("Session configured with server-side VAD")
 
             # Load user profile
-            await session.load_user(user_id="new") # Use 'new' for testing
+            await session.load_user(user_id="test_user") 
 
             # voice intro from the AI
             await session.send_voice_intro("Hey there 👋 I’m here to support you on your nutrition journey; no judgment, no lectures, just helpful ideas.")

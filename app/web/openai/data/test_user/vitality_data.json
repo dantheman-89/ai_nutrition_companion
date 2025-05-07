@@ -1,0 +1,27 @@
+{
+    "basic": {
+        "preferred_name": "Daniel",
+        "age_years": 36,
+        "sex": "male" 
+    },
+    "status": "Gold",
+    "points": {
+        "current_year": 48500,
+        "goal_for_diamond": 50000,
+        "weekly_active_rewards_streak": 8 
+    },
+    "recent_activities": [
+        {"date": "2025-05-03", "type": "Gym Visit", "points": 150},
+        {"date": "2025-05-01", "type": "HealthyFood Purchase", "points": 50},
+        {"date": "2025-04-29", "type": "Parkrun", "points": 300}
+    ],
+    "health_checks": {
+        "last_vitality_health_check": "2024-11-15",
+        "weight": 70,
+        "height": 175,
+        "bmi": 22.9,
+        "blood_pressure": "Normal: 120/80",
+        "glucose": "Normal: 4.9 mmol/L",
+        "LDL cholesterol": "Normal: 2.8 mmol/L"
+    }
+}

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nutrition AI</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-black text-white h-screen flex flex-col">
+  <!-- Initial screen with pulsating circle -->
+  <div id="initial-screen" class="flex flex-col items-center justify-center h-screen">
+    <div class="pulsating-circle"></div>
+    <p class="mt-8 text-2xl font-light">Tap to Speak</p>
+  </div>
+
+  <!-- Chat interface (initially hidden) -->
+  <div id="chat-interface" class="flex flex-col h-screen hidden">
+    <!-- Header -->
+    <div class="p-4 flex items-center border-b border-gray-800">
+      <button id="back-button" class="mr-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <div class="flex items-center">
+        <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black mr-2">
+          <span>N</span>
+        </div>
+        <span class="font-medium">NutritionAI</span>
+      </div>
+    </div>
+
+    <!-- messages container -->
+    <div id="messages" class="flex-1 overflow-auto p-4 space-y-3"></div>
+
+    <!-- input bar -->
+    <div class="p-4 flex border-t border-gray-800">
+      <div class="flex-1 flex items-center bg-gray-800 rounded-full px-4">
+        <input
+          id="input"
+          type="text"
+          placeholder="Type a message…"
+          class="flex-1 bg-transparent border-none outline-none py-3 text-white"
+        />
+        <button id="mic-button" class="ml-2 w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Status indicator -->
+    <div id="status" class="p-2 text-xs text-gray-400 text-center"></div>
+  </div>
+
+  <!-- Audio chunks debugging - hidden by default -->
+  <div id="debug" class="p-2 bg-gray-800 text-xs text-gray-400 hidden"></div>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

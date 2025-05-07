@@ -18,7 +18,7 @@ fastapi = ">=0.115.12,<0.116.0"
 uvicorn = { version = ">=0.34.0,<0.35.0", extras = ["standard"] }
 jinja2 = ">=3.1.6,<4.0.0"
 faster-whisper = "^1.0.1"
-openai = "^1.75.0"
+openai = { version = "^1.75.0", extras = ["realtime"]}
 websocket-client = "^1.8.0"
 pydub = { version = "^0.25.1"}
 

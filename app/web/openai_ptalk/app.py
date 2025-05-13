@@ -17,9 +17,9 @@ from openai.types.beta.realtime.session import Session, InputAudioNoiseReduction
 
 from app.core.audio.convert import convert_audio_to_mp3
 from config import SYSTEM_PROMPT, OPENAI_API_KEY
-from app.web.openai.tools import PROFILE_TOOL_DEFINITION, update_profile_json, LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap
-from app.web.openai.tools import CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets
-from app.web.openai.tools import USER_PROFILE_FILENAME
+from .tools import PROFILE_TOOL_DEFINITION, update_profile_json, LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap
+from .tools import CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets
+from .tools import USER_PROFILE_FILENAME
 
 # Set up logging with timestamps and log levels
 # Set up logging with timestamps and log levels
@@ -164,12 +164,13 @@ class RealtimeSession:
         Listen for messages from the client and process them.
         This function runs as a separate task.
         """
+
         task_id = id(asyncio.current_task())
         logger.info(f"[CLIENT HANDLER-{task_id}] Starting client events handler")
+
         try:
             while True:
                 # Wait for the next message from the client
-                logger.debug(f"[CLIENT HANDLER-{task_id}] Waiting for client message...")
                 msg = await self.websocket.receive()
                 logger.debug(f"[CLIENT HANDLER-{task_id}] Received message type: {msg.keys()}")
                 
@@ -224,13 +225,13 @@ class RealtimeSession:
                     
                     logger.debug(f"[CLIENT HANDLER-{task_id}] processed client audio event: {msg.keys()}")
                     
-        except WebSocketDisconnect:
-            print("Client disconnected")
+        except (WebSocketDisconnect, RuntimeError):
+            print("Client disconnected  (WebSocketDisconnect or RuntimeError)")
         except asyncio.CancelledError:
             print("Receive task cancelled")
+            raise
         except Exception as e:
             print(f"Error in recv_from_client: {e}")
-            import traceback
             traceback.print_exc()
 
     async def handle_openai_events(self):
@@ -430,6 +431,9 @@ async def realtime_ws(ws: WebSocket):
     await ws.accept()
     print("WebSocket connection accepted")
 
+    # Track resources for proper cleanup
+    session = None
+
     try:
         # Start an OpenAI session
         session = RealtimeSession(ws)
@@ -438,6 +442,12 @@ async def realtime_ws(ws: WebSocket):
         async with session.client.beta.realtime.connect(model=MODEL) as connection:
             session.connection = connection
             print("OpenAI Realtime connection established")
+
+            # Send connection success message
+            await ws.send_json({
+                "type": "connection_status",
+                "status": "connected"
+            })
 
             # Configure the session
             await connection.session.update(
@@ -489,12 +499,20 @@ async def realtime_ws(ws: WebSocket):
                 except asyncio.CancelledError:
                     pass
     
+    except WebSocketDisconnect:
+        # Handle normal client disconnection
+        print("WebSocket disconnected by client")
+        
     except Exception as e:
+        # Handle unexpected errors
         print(f"WebSocket error: {e}")
         import traceback
         traceback.print_exc()
     
     finally:
-        # Connection is automatically closed by the async with context manager
-        print("Closing WebSocket connection")
-        await ws.close()
+        try:
+            await ws.close()
+            print("Closing WebSocket connection")
+        except RuntimeError:
+            # WebSocket already closed
+            pass

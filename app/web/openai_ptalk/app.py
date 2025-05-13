@@ -193,6 +193,16 @@ class RealtimeSession:
                             )
                             # Generate a response
                             await self.connection.response.create()
+
+                        # commit audio buffer to finalize speech input
+                        elif msg_type == "speech_end":
+                            print(f"[CLIENT HANDLER] Speech end signal received")
+                            # Commit audio buffer to finalize speech input
+                            await self.connection.input_audio_buffer.commit()
+                            # Generate a response
+                            await self.connection.response.create()
+                            print(f"[CLIENT HANDLER] Speech committed and response requested")
+
                     
                     except json.JSONDecodeError:
                         print(f"Invalid JSON received")
@@ -440,13 +450,13 @@ async def realtime_ws(ws: WebSocket):
                         model="gpt-4o-mini-transcribe",
                         prompt=""
                     ),
-                    turn_detection={"type": "semantic_vad", "eagerness": "medium"},
-                    max_response_output_tokens=1024,
+                    turn_detection=None, #{"type": "semantic_vad", "eagerness": "medium"},
+                    max_response_output_tokens=4096,
                     tools=[PROFILE_TOOL_DEFINITION, LOAD_VITALITY_DATA_TOOL_DEFINITION, CALCULATE_TARGETS_TOOL_DEFINITION, LOAD_HEALTHY_SWAP_TOOL_DEFINITION],
                     tool_choice="auto"
                 )
             )
-            print("Session configured with server-side VAD")
+            print("Session configured with push-to-talk")
 
             # Load user profile
             await session.load_user(user_id="test_user") 

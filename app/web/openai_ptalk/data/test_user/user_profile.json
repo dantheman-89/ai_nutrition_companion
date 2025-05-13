@@ -1,0 +1,74 @@
+{
+  "basic_info": {
+    "preferred_name": "Daniel",
+    "age_years": 36,
+    "sex": "male",
+    "height_cm": 175,
+    "weight_kg": 70,
+    "bmi_kg_m2": 22.9
+  },
+  "goals": {
+    "weight_goals": {
+      "target_weight_kg": 67,
+      "goal_timeframe_weeks": 16
+    },
+    "nutritional_goals": {
+      "daily_kilojoules": 7264,
+      "protein_grams": 112,
+      "fat_grams": 48,
+      "carbohydrate_grams": 214,
+      "fiber_grams": 24
+    },
+    "ready_to_calculate_goal": true,
+    "goal_set": true
+  },
+  "dietary_preferences": {
+    "culture": "Chinese",
+    "food_preferences": null,
+    "allergies": null
+  },
+  "eating_habits": {
+    "eating_habits": null
+  },
+  "vitality_information": {
+    "status": "Gold",
+    "points": {
+      "current_year": 48500,
+      "goal_for_diamond": 50000,
+      "weekly_active_rewards_streak": 8
+    },
+    "recent_activities": [
+      {
+        "date": "2025-05-03",
+        "type": "Gym Visit",
+        "points": 150
+      },
+      {
+        "date": "2025-05-01",
+        "type": "HealthyFood Purchase",
+        "points": 50
+      },
+      {
+        "date": "2025-04-29",
+        "type": "Parkrun",
+        "points": 300
+      }
+    ],
+    "health_checks": {
+      "last_vitality_health_check": "2024-11-15",
+      "weight": 70,
+      "height": 175,
+      "bmi": 22.9,
+      "blood_pressure": "Normal: 120/80",
+      "glucose": "Normal: 4.9 mmol/L",
+      "LDL_cholesterol": null,
+      "LDL cholesterol": "Normal: 2.8 mmol/L"
+    }
+  },
+  "healthy_swaps": {
+    "NBA": null,
+    "date_recommended": null,
+    "recommended_swaps": null,
+    "notes": null
+  }
+}

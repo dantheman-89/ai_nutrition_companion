@@ -5,10 +5,97 @@ const recordBtn = document.getElementById("record");
 const statusEl = document.getElementById("status");
 const debugEl = document.getElementById("debug");
 
+
+// track connection state
+let connectionState = "DISCONNECTED"; // "DISCONNECTED", "CONNECTING", "CONNECTED"
+const connectBtn = document.getElementById("connect");
+
+function initializeUI() {
+    // Update UI based on initial state
+    updateConnectionUI("DISCONNECTED");
+    
+    // Set up connect button listener
+    connectBtn.addEventListener("click", handleConnectionToggle);
+}
+
+function handleConnectionToggle() {
+    if (connectionState === "DISCONNECTED") {
+        connectToServer();
+    } else if (connectionState === "CONNECTED") {
+        disconnectFromServer();
+    }
+    // Do nothing if CONNECTING - button should be disabled
+}
+
+function connectToServer() {
+    updateConnectionUI("CONNECTING");
+    
+    // Initialize WebSocket
+    initWebSocket(() => {
+        // Success callback
+        updateConnectionUI("CONNECTED");
+    });
+    
+    // Add connection timeout
+    connectionTimeout = setTimeout(() => {
+        if (connectionState === "CONNECTING") {
+            handleConnectionError("Connection timeout");
+        }
+    }, 10000);
+}
+
+let userInitiatedDisconnect = false;
+
+function disconnectFromServer() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close();
+    }
+    updateConnectionUI("DISCONNECTED");
+}
+
+function updateConnectionUI(state) {
+    connectionState = state;
+    
+    // Update button text and state
+    switch(state) {
+        case "DISCONNECTED":
+            connectBtn.textContent = "Connect";
+            connectBtn.disabled = false;
+            recordBtn.disabled = true; // Disable recording when disconnected
+            break;
+            
+        case "CONNECTING":
+            connectBtn.textContent = "Connecting...";
+            connectBtn.disabled = true;
+            recordBtn.disabled = true;
+            break;
+            
+        case "CONNECTED":
+            connectBtn.textContent = "Disconnect";
+            connectBtn.disabled = false;
+            recordBtn.disabled = false; // Enable recording when connected
+            break;
+    }
+    
+    // Update status display
+    setStatus(state.toLowerCase());
+}
+
+function handleConnectionError(message) {
+    updateConnectionUI("DISCONNECTED");
+    setStatus(`Error: ${message}`);
+    console.error("Connection error:", message);
+}
+
+
 // --- Audio Playback ---
 let audioContext;
 let audioQueue = [];
 let isPlaying = false;
+let audioChunkBuffer = [];
+let audioChunkTimer = null;
+const BATCH_INTERVAL_MS = 200; // Send every 200ms
+
 
 function getAudioContext() {
   if (!audioContext) {
@@ -134,27 +221,16 @@ function initWebSocket(onOpenCallback = null) {
 }
 
 function handleWebSocketDisconnectOrError(type, eventOrError) {
-    const reason = type === 'close'
-        ? `WebSocket closed (Code: ${eventOrError.code}, Clean: ${eventOrError.wasClean}, Reason: ${eventOrError.reason})`
-        : `WebSocket error: ${eventOrError.message || 'Unknown error'}`;
-
-    debug(reason);
-    console.error(reason, eventOrError); // Log the event/error object too
-
-    wsConnected = false;
-    setStatus(type === 'close' ? `Disconnected (Code: ${eventOrError.code})` : "WebSocket error");
-
-    // Stop audio capture if it was active
-    if (isAudioCaptureActive || isRecording) {
-        cleanupAudioProcessing(`WebSocket ${type}`); // Ensure audio resources are released
+   if (userInitiatedDisconnect) {
+        // User already initiated disconnect, no need to show error
+        userInitiatedDisconnect = false;  // Reset flag
+        return;
     }
-
-    // Reset state and UI
-    isAudioCaptureActive = false;
-    isRecording = false;
-    updateButtonUI(false);
-    recordBtn.disabled = false; // Re-enable button if it was disabled during an attempt
-    resetStateAfterError(`WebSocket ${type}`); // Reset message bubbles etc.
+    
+    if (connectionState === "CONNECTED" || connectionState === "CONNECTING") {
+        const errorMsg = type === "error" ? `WebSocket error: ${eventOrError}` : "WebSocket disconnected";
+        handleConnectionError(errorMsg);
+    }
 }
 
 // --- WebSocket Message Handling ---
@@ -326,13 +402,15 @@ function handleTranscriptDone(data) {
 function handleInputBufferCommitted(data) {
     debug("Received input_audio_buffer_committed. Resetting flags for new turn.");
     userTranscriptFinalized = false;
-    // Remove: textDoneReceived = false;
+    
     // Clear any potentially lingering buffer from an incomplete previous turn
     if (aiResponseBuffer !== null) {
         debug("Clearing aiResponseBuffer in handleInputBufferCommitted.");
         aiResponseBuffer = null;
     }
+
     debug(`userTranscriptFinalized set to FALSE.`);
+    setStatus("Processing speech...");
     // This signals the start of potentially receiving user transcript deltas
     // and that subsequent AI text deltas should be buffered.
 }
@@ -381,6 +459,10 @@ async function toggleAudioCapture() {
 
 async function startCapture() {
     debug("Attempting to start audio capture...");
+
+    // Add a temporary disabled state for the button while setup happens
+    recordBtn.disabled = true;
+    setStatus("Starting microphone...");
 
     // Resume AudioContext if needed
     try {
@@ -437,8 +519,26 @@ function stopCapture() {
     debug("Stopping audio capture (user request).");
     isAudioCaptureActive = false; // Mark user intent as stopped
     updateButtonUI(false);
+    
+    // Send speech_end signal to server before cleaning up
+    try {
+        if (wsConnected && ws?.readyState === WebSocket.OPEN) {
+            debug("Sending speech_end signal to server");
+            ws.send(JSON.stringify({
+                type: "speech_end"
+            }));
+            setStatus("Processing...");
+        } else {
+            debug("Cannot send speech_end: WebSocket not connected");
+            setStatus("Connection lost, try again");
+        }
+    } catch (err) {
+        debug(`Error sending speech_end: ${err.message}`);
+        console.error("Error sending speech_end:", err);
+    }
+    
+    // Clean up audio processing resources
     cleanupAudioProcessing("User stopped capture");
-    setStatus("Ready");
 }
 
 // --- Audio Processing Setup & Cleanup ---
@@ -514,7 +614,7 @@ async function setupAudioWorklet(ctx, source) {
             class PCMProcessor extends AudioWorkletProcessor {
                 constructor() {
                     super();
-                    this.bufferSize = 2048; // Process in chunks
+                    this.bufferSize = 8192; // Process in chunks
                     this.sampleRate = 24000; // Match OpenAI's rate
                 }
 
@@ -567,7 +667,7 @@ async function setupAudioWorklet(ctx, source) {
 
 function setupScriptProcessor(ctx, source) {
     debug("Setting up ScriptProcessor...");
-    const bufferSize = 4096; // Or another power of 2
+    const bufferSize = 16384; // Or another power of 2
     if (!ctx.createScriptProcessor) {
         console.error("ScriptProcessorNode is not supported.");
         setStatus("Error: Browser audio API outdated");
@@ -650,36 +750,99 @@ function cleanupAudioProcessing(reason) {
 function handleAudioCaptureError(errorMessage) {
     debug(`handleAudioCaptureError called. Error: ${errorMessage}`);
     console.error("Audio Capture Error:", errorMessage);
-    setStatus(errorMessage); // Show error to user
+    setStatus(`Error: ${errorMessage.substring(0, 30)}${errorMessage.length > 30 ? '...' : ''}`);
     cleanupAudioProcessing(`Error: ${errorMessage}`); // Clean up resources
     // Ensure UI reflects the stopped state
-    isAudioCaptureActive = false; // Ensure intent is marked as stopped
-    isRecording = false; // Explicitly set isRecording false here too
+    isAudioCaptureActive = false;
+    isRecording = false;
+    updateButtonUI(false); // Reset button to Talk state
+    recordBtn.disabled = false; // Make sure button is enabled for retry
+}
+
+// Helper to combine audio buffers
+function concatAudioBuffers(buffers) {
+  // Calculate total length
+  const totalLength = buffers.reduce((acc, buf) => acc + buf.byteLength, 0);
+  const result = new ArrayBuffer(totalLength);
+  const view = new Uint8Array(result);
+  
+  // Copy data
+  let offset = 0;
+  for (const buffer of buffers) {
+    view.set(new Uint8Array(buffer), offset);
+    offset += buffer.byteLength;
+  }
+  
+  return result;
 }
 
 // --- PCM Data Sending ---
+// PCM data batching and sending
 function sendPCMDataToServer(float32Data) {
   if (!float32Data || float32Data.length === 0) {
-      // debug("sendPCMDataToServer called with empty data."); // Can be noisy
-      return;
+    return;
   }
+
   try {
+    // Basic voice activity detection to reduce silent packets
+    const sum = float32Data.reduce((acc, val) => acc + Math.abs(val), 0);
+    const avg = sum / float32Data.length;
+    const isVoice = avg > 0.005; // Adjust threshold as needed
+
+    // Skip some silence packets (send ~25% of silence)
+    if (!isVoice && Math.random() > 0.25) {
+      return;
+    }
+    
+    // Convert to Int16 format
     const int16Data = new Int16Array(float32Data.length);
     for (let i = 0; i < float32Data.length; i++) {
       const s = Math.max(-1, Math.min(1, float32Data[i]));
       int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
     }
-    // debug(`Attempting to send ${int16Data.byteLength} bytes. isAudioCaptureActive: ${isAudioCaptureActive}, wsConnected: ${wsConnected}`); // Too noisy
-    // Check capture active state AND WebSocket state
-    if (isAudioCaptureActive && wsConnected && ws?.readyState === WebSocket.OPEN) {
-        debug(">>> Sending PCM data via WebSocket"); // Log sending attempt
-        ws.send(int16Data.buffer);
-    } else {
-        debug(`Skipping PCM send: isAudioCaptureActive=${isAudioCaptureActive}, wsConnected=${wsConnected}, ws.readyState=${ws?.readyState}`); // Log skipped send
+
+    // Add to batch buffer
+    audioChunkBuffer.push(int16Data.buffer);
+    
+    // Start timer if not running
+    if (!audioChunkTimer) {
+      audioChunkTimer = setTimeout(() => {
+        if (audioChunkBuffer.length > 0 && isAudioCaptureActive && 
+            wsConnected && ws?.readyState === WebSocket.OPEN) {
+          
+          // Combine buffers if multiple chunks available
+          let dataToSend;
+          if (audioChunkBuffer.length > 1) {
+            dataToSend = concatAudioBuffers(audioChunkBuffer);
+            debug(`Sending batched audio: ${audioChunkBuffer.length} chunks (${dataToSend.byteLength} bytes)`);
+          } else {
+            // Just send the single buffer directly
+            dataToSend = audioChunkBuffer[0];
+            debug(`Sending single audio chunk (${dataToSend.byteLength} bytes)`);
+          }
+          
+          // Send the data
+          ws.send(dataToSend);
+        } else if (audioChunkBuffer.length > 0) {
+          debug(`Dropped ${audioChunkBuffer.length} audio chunks - connection not ready`);
+        }
+        
+        // Reset buffer and timer
+        audioChunkBuffer = [];
+        audioChunkTimer = null;
+      }, BATCH_INTERVAL_MS);
     }
+    
   } catch (err) {
-    debug(`Error sending PCM data: ${err.message}`);
+    debug(`Error processing PCM data: ${err.message}`);
     console.error("Error in sendPCMDataToServer:", err);
+    
+    // Reset buffer and timer in case of error
+    audioChunkBuffer = [];
+    if (audioChunkTimer) {
+      clearTimeout(audioChunkTimer);
+      audioChunkTimer = null;
+    }
   }
 }
 
@@ -726,9 +889,13 @@ recordBtn.addEventListener("click", toggleAudioCapture);
 
 // DOMContentLoaded: Connect WebSocket immediately
 document.addEventListener("DOMContentLoaded", () => {
-    debug("DOM Content Loaded. Initializing WebSocket...");
-    initWebSocket(); // Connect WebSocket on page load
-    setStatus("Connecting...");
+    debug("DOM Content Loaded. Initializing UI...");
+    
+    // Initialize UI first to set up button handlers correctly
+    initializeUI();
+    
+    // Then handle other initializations
+    setStatus("Ready to connect");
     try {
         getAudioContext(); // Initialize context early
         debug("AudioContext obtained/initialized.");

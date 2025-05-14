@@ -203,8 +203,7 @@ class RealtimeSession:
                             # Generate a response
                             await self.connection.response.create()
                             print(f"[CLIENT HANDLER] Speech committed and response requested")
-
-                    
+    
                     except json.JSONDecodeError:
                         print(f"Invalid JSON received")
                 

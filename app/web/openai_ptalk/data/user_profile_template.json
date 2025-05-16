@@ -1,0 +1,57 @@
+{
+  "basic_info": {
+    "preferred_name": "Dan",
+    "age_years": null,
+    "sex": null,
+    "height_cm": null,
+    "weight_kg": null,
+    "bmi_kg_m2": null
+  },
+  "goals": {
+    "weight_goals": {
+      "target_weight_kg": null,
+      "goal_timeframe_weeks": null
+    },
+    "nutritional_goals": {
+      "daily_kilojoules": null,
+      "protein_grams": null,
+      "fat_grams": null,
+      "carbohydrate_grams": null,
+      "fiber_grams": null
+    },
+    "ready_to_calculate_goal": false,
+    "goal_set": false
+  },
+  "dietary_preferences": {
+    "culture": null,
+    "food_preferences": null,
+    "allergies": null
+  },
+  "eating_habits": {
+    "eating_habits": null
+  },
+  "vitality_information": {
+    "status": null,
+    "points": {
+      "current_year": null,
+      "goal_for_diamond": null,
+      "weekly_active_rewards_streak": null
+    },
+    "recent_activities": null,
+    "health_checks": {
+      "last_vitality_health_check": null,
+      "weight": null,
+      "height": null,
+      "bmi": null,
+      "blood_pressure": null,
+      "glucose": null,
+      "LDL_cholesterol": null
+    }
+  },
+  "healthy_swaps": {
+    "NBA": null,
+    "date_recommended": null,
+    "recommended_swaps": null,
+    "notes": null
+  }
+}

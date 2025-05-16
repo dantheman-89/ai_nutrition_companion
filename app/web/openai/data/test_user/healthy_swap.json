@@ -1,0 +1,31 @@
+{
+    "NBA": "Discovery Vitality HealthyFood Swaps",
+    "date_recommended": "2025-05-05",
+    "recommended_swaps": [
+      {
+        "purchase_category": "Breakfast Cereal",
+        "original_item_example": "Sugary Puffs",
+        "recommended_swap": "High-Fibre Bran Flakes",
+        "reason": "Lower sugar content, higher dietary fibre for better digestion."
+      },
+      {
+        "purchase_category": "Yogurt",
+        "original_item_example": "Full-Fat Flavoured Yogurt",
+        "recommended_swap": "Low-Fat Plain Yogurt or Greek Yogurt",
+        "reason": "Lower saturated fat and added sugar. Add fresh fruit for flavour."
+      },
+      {
+        "purchase_category": "Bread",
+        "original_item_example": "Standard White Bread",
+        "recommended_swap": "Wholewheat or Seeded Brown Bread",
+        "reason": "Higher fibre content, more sustained energy release."
+      },
+      {
+        "purchase_category": "Cold Drinks",
+        "original_item_example": "Sugar-Sweetened Soda",
+        "recommended_swap": "Water, Sugar-Free Sparkling Water, Unsweetened Iced Tea",
+        "reason": "Reduces intake of empty calories and added sugars."
+      }
+    ],
+    "notes": "Recommendations based on recent HealthyFood tagged purchases. Encouraging swaps towards items with higher fibre, lower sugar, and healthier fats."
+  }

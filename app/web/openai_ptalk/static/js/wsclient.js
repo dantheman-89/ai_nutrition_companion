@@ -1,6 +1,6 @@
 // WebSocket Module - Handles communication with the server
-import { debug, createMessageBubble, scrollToBottom, connectionState, updateConnectionUI} from './ui.js';
-import { playAudioChunk } from './audio.js';
+import { debug, createMessageBubble, scrollToBottom, connectionState, updateConnectionUI, elements} from './ui.js';
+import { playAudioChunk, stopAudioCapture, } from './audio.js';
 
 // WebSocket state
 let ws;
@@ -20,107 +20,61 @@ let lastAiElem = null;
 // Manage WebSocket connections
 //-------------------------------------------------
 
-// Handle connection button click
-function handleConnectionToggle() {
-  if (connectionState === "DISCONNECTED") {
-    connectToServer();
-  } else if (connectionState === "CONNECTED") {
-    disconnectFromServer();
-  }
-  // Do nothing if CONNECTING - button should be disabled
-}
-
-// Connect to the server
-function connectToServer() {
-  updateConnectionUI("CONNECTING");
-  
-  // Initialize WebSocket
-  initWebSocket(() => {
-    // Success callback
-    updateConnectionUI("CONNECTED");
-  });
-  
-  // Add connection timeout
-  connectionTimeout = setTimeout(() => {
-    if (connectionState === "CONNECTING") {
-      handleConnectionError("Connection timeout");
-    }
-  }, 10000);
-}
-
-// Disconnect from the server
-function disconnectFromServer() {
-  userInitiatedDisconnect = true;
-  const ws = WebSocket.getWebSocket();
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    ws.close();
-  }
-  updateConnectionUI("DISCONNECTED");
-}
-
-// Handle connection errors
-function handleConnectionError(message) {
-  updateConnectionUI("DISCONNECTED");
-  console.error("Connection error:", message);
-}
-
-
-// Initialize WebSocket connection
-function initWebSocket(onOpenCallback = null) {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    debug(`WebSocket already ${ws.readyState === WebSocket.OPEN ? 'open' : 'connecting'}.`);
-    if (ws.readyState === WebSocket.OPEN && onOpenCallback) {
-      onOpenCallback();
-    }
-    return;
-  }
-  debug("Initializing WebSocket connection...");
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-  ws.onopen = () => {
-    wsConnected = true;
-    debug("WebSocket connection opened.");
-    if (onOpenCallback) {
-      onOpenCallback();
-    }
-  };
-
-  ws.onclose = (event) => handleWebSocketDisconnectOrError('close', event);
-  ws.onerror = (error) => handleWebSocketDisconnectOrError('error', error);
-  ws.onmessage = handleWebSocketMessage;
-}
-
-
-// Handle WebSocket disconnection or error
-function handleWebSocketDisconnectOrError(type, eventOrError) {
-  const reason = type === 'close'
-    ? `WebSocket closed (Code: ${eventOrError.code}, Clean: ${eventOrError.wasClean}, Reason: ${eventOrError.reason})`
-    : `WebSocket error: ${eventOrError.message || 'Unknown error'}`;
-
-  debug(reason);
-  console.error(reason, eventOrError);
-
-  wsConnected = false;
-}
-
-// Reset state after an error
-function resetStateAfterError(reason) {
-  debug(`Resetting state after error: ${reason}`);
-  // Reset message bubbles
-  currentUserSpeechBubble = null;
-  lastAiElem = null;
-}
-
 // Check if WebSocket is connected
-function isWebSocketConnected() {
-  return wsConnected;
+function isConnected() {
+  return wsConnected && ws && ws.readyState === window.WebSocket.OPEN;
 }
 
-// Get the WebSocket instance
+// Get WebSocket instance
 function getWebSocket() {
   return ws;
 }
+
+// Connect to WebSocket server
+function connect() {
+  if (isConnected()) {
+    debug("WebSocket already connected");
+    return;
+  }
+  
+  updateConnectionUI("CONNECTING");
+  
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  
+  // Set up WebSocket event handlers
+  ws.onopen = () => {
+    wsConnected = true;
+    debug("WebSocket connection opened");
+    updateConnectionUI("CONNECTED");
+  };
+  
+  ws.onclose = (event) => {
+    wsConnected = false;
+    debug(`WebSocket connection closed: ${event.code} ${event.reason}`);
+    updateConnectionUI("DISCONNECTED");
+    stopAudioCapture();
+  };
+  
+  ws.onerror = (error) => {
+    debug(`WebSocket error: ${error}`);
+    updateConnectionUI("DISCONNECTED");
+  };
+  
+  ws.onmessage = handleWebSocketMessage;
+}
+
+// Disconnect WebSocket
+function disconnect() {
+  if (!ws) return;
+  
+  stopAudioCapture();
+  ws.close();
+  ws = null;
+  wsConnected = false;
+  updateConnectionUI("DISCONNECTED");
+}
+
 
 //-------------------------------------------------
 // Handle incoming WebSocket messages
@@ -317,7 +271,7 @@ function handleServerError(data) {
 
 // Send a text message to the server
 function sendTextMessage(text) {
-  if (!text || !wsConnected || ws?.readyState !== WebSocket.OPEN) {
+  if (!text || !isConnected()) {
     debug(`Cannot send text: wsConnected=${wsConnected}, ws.readyState=${ws?.readyState}`);
     return false;
   }
@@ -327,26 +281,6 @@ function sendTextMessage(text) {
   // Send JSON over WebSocket
   ws.send(JSON.stringify({ type: "user_message", text }));
   return true;
-}
-
-// Send speech end signal to server
-function sendSpeechEndSignal() {
-  try {
-    if (wsConnected && ws?.readyState === WebSocket.OPEN) {
-      debug("Sending speech_end signal to server");
-      ws.send(JSON.stringify({
-        type: "speech_end"
-      }));
-      return true;
-    } else {
-      debug("Cannot send speech_end: WebSocket not connected");
-      return false;
-    }
-  } catch (err) {
-    debug(`Error sending speech_end: ${err.message}`);
-    console.error("Error sending speech_end:", err);
-    return false;
-  }
 }
 
 function setCurrentUserSpeechBubble(bubble) {
@@ -367,7 +301,7 @@ function handleSendButtonClick() {
   const text = elements.inputEl.value.trim();
   if (!text) return;
   
-  if (WebSocket.sendTextMessage(text)) {
+  if (sendTextMessage(text)) {
     // Message sent successfully
     createMessageBubble("user", "You: " + text);
     elements.inputEl.value = "";
@@ -378,17 +312,11 @@ function handleSendButtonClick() {
 
 // Export public API
 export {
-  handleConnectionToggle,
-  connectToServer,
-  disconnectFromServer,
-  handleConnectionError,
-  initWebSocket,
+  wsConnected,
+  ws,
+  connect,
+  disconnect,
   sendTextMessage,
-  sendSpeechEndSignal,
-  isWebSocketConnected,
-  getWebSocket,
-  userTranscriptFinalized,
-  setCurrentUserSpeechBubble,
-  setLastAiElem,
-  handleSendButtonClick
+  isConnected,
+  getWebSocket
 };

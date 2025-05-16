@@ -1,6 +1,6 @@
 // Audio Module - Handles audio capture, processing and playback
-import * as WebSocket from './websocket.js';
-import { debug } from './ui.js';
+import * as WSClient from './wsclient.js';
+import * as UI from './ui.js';
 
 
 // Audio playback state
@@ -20,6 +20,9 @@ let isAudioCaptureActive = false;
 let audioChunkBuffer = [];
 let audioChunkTimer = null;
 const BATCH_INTERVAL_MS = 200;
+
+// Track if the worklet module has been loaded
+let workletModuleLoaded = false;
 
 // ------------------------------------------------
 // Audio Playback Functions
@@ -108,6 +111,10 @@ async function playNextAudioChunk() {
   }
 }
 
+
+// ------------------------------------------------
+// Audio Recording Functions
+// ------------------------------------------------
 /**
  * Set up audio capture and processing
  * @param {boolean} isAudioCaptureActive - Whether audio capture is active
@@ -115,423 +122,314 @@ async function playNextAudioChunk() {
  * @param {WebSocket} ws - WebSocket instance
  */
 async function setupAudioProcessing(isAudioCaptureActive, wsConnected, ws) {
-  debug(">>> setupAudioProcessing called");
+  UI.debug(">>> setupAudioProcessing called");
+  
+  // Check if already recording
   if (isRecording || sourceNode) {
-    debug("setupAudioProcessing called but processing seems already active.");
+    UI.debug("setupAudioProcessing called but processing seems already active.");
     return; // Avoid duplicate setup
   }
-  if (!isAudioCaptureActive || !wsConnected || ws?.readyState !== WebSocket.OPEN) {
-    debug(`setupAudioProcessing blocked: isAudioCaptureActive=${isAudioCaptureActive}, wsConnected=${wsConnected}, wsState=${ws?.readyState}`);
+  
+  // Check requirements for audio setup
+  if (!isAudioCaptureActive || !wsConnected || ws?.readyState !== window.WebSocket.OPEN) {
+    UI.debug(`setupAudioProcessing blocked: isAudioCaptureActive=${isAudioCaptureActive}, wsConnected=${wsConnected}, wsState=${ws?.readyState}`);
     return false;
   }
 
   try {
+    // Initialize and resume audio context
     const ctx = getAudioContext();
     if (ctx.state !== 'running') {
-      debug("Attempting to resume AudioContext...");
+      UI.debug("Attempting to resume AudioContext...");
       await ctx.resume();
-      debug(`AudioContext resumed. New state: ${ctx.state}`);
+      UI.debug(`AudioContext resumed. New state: ${ctx.state}`);
       if (ctx.state !== 'running') throw new Error(`AudioContext failed to resume (${ctx.state})`);
     }
 
-    debug("Requesting microphone access (getUserMedia)...");
-    audioStream = await navigator.mediaDevices.getUserMedia({ audio: {} });
-    debug("Microphone access granted.");
+    // Get microphone access
+    UI.debug("Requesting microphone access (getUserMedia)...");
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    UI.debug("Microphone access granted.");
 
+    // Create source from microphone
     sourceNode = ctx.createMediaStreamSource(audioStream);
-    debug("Created sourceNode.");
+    UI.debug("Created sourceNode.");
 
     // Attempt AudioWorklet first
-    let processorNode = await setupAudioWorklet(ctx, sourceNode, isAudioCaptureActive, wsConnected, ws);
+    let processorNode = await setupAudioWorklet(ctx, sourceNode, ws);
 
     // Fallback to ScriptProcessor if Worklet failed
     if (!processorNode) {
-      debug("Setting up ScriptProcessor as fallback...");
-      processorNode = setupScriptProcessor(ctx, sourceNode, isAudioCaptureActive, wsConnected, ws);
+      processorNode = setupScriptProcessor(ctx, sourceNode, ws);
+      if (!processorNode) {
+        throw new Error("Failed to setup audio processing");
+      }
     }
 
-    if (!processorNode) throw new Error("Audio processor setup failed (both methods).");
-
-    // Connect the source to the chosen processor
+    // Connect source to processor
     sourceNode.connect(processorNode);
-    debug("Source connected to processor.");
-
-    isRecording = true; // Mark that processing is now active
-    debug("Audio processor setup successful. isRecording = true");
+    UI.debug("Audio nodes connected.");
+    
+    // Set recording state
+    isRecording = true;
     return true;
 
   } catch (err) {
-    console.error('Error setting up audio processing:', err);
+    UI.debug(`Audio setup error: ${err.message}`);
+    console.error("Audio setup error:", err);
+    cleanupAudioResources();
     return false;
   }
 }
 
-
-// ------------------------------------------------
-// Audio Recording Functions
-// ------------------------------------------------
-
 // Set up AudioWorklet for audio processing
-async function setupAudioWorklet(ctx, source, isAudioCaptureActive, wsConnected, ws) {
+async function setupAudioWorklet(ctx, source, ws) {
   if (!ctx.audioWorklet) {
-    debug("AudioWorklet not supported by this browser.");
+    UI.debug("AudioWorklet not supported by this browser.");
     return null;
   }
+  
   try {
-    debug("Attempting AudioWorklet setup...");
-    const workletCode = `
-      class PCMProcessor extends AudioWorkletProcessor {
-        constructor() {
-          super();
-          this.bufferSize = 8192; // Process in chunks
-          this.sampleRate = 24000; // Match OpenAI's rate
-        }
+    UI.debug("Attempting AudioWorklet setup...");
+    
+    // Only load the module once
+    if (!workletModuleLoaded) {
+      await ctx.audioWorklet.addModule('/static/js/pcmprocessor.js');
+      workletModuleLoaded = true;
+      UI.debug("AudioWorklet module added.");
+    } else {
+      UI.debug("AudioWorklet module already loaded, reusing.");
+    }
 
-        process(inputs, outputs) {
-          // Get mono input data
-          const input = inputs[0]?.[0]; // Optional chaining for safety
-          // Check isRecording flag inside the processor is tricky.
-          // Rely on disconnecting the node to stop processing.
-          if (input && input.length > 0) {
-            // Send data directly, rely on node disconnection to stop
-            this.port.postMessage({
-              pcmData: input
-            });
-          }
-          return true; // Keep processor alive until node disconnected
-        }
-      }
+    // Create new processor node
+    const workletNode = new AudioWorkletNode(ctx, 'pcm-processor', {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+      channelCount: 1
+    });
+    UI.debug("AudioWorkletNode created.");
 
-      registerProcessor('pcm-processor', PCMProcessor);
-    `;
-    const blob = new Blob([workletCode], { type: 'application/javascript' });
-    const workletUrl = URL.createObjectURL(blob);
-
-    await ctx.audioWorklet.addModule(workletUrl);
-    debug("AudioWorklet module added.");
-    const workletNode = new AudioWorkletNode(ctx, 'pcm-processor');
-    debug("AudioWorkletNode created.");
-
+    // Set up message handling from processor
     workletNode.port.onmessage = (event) => {
-      // Send data ONLY if capture is intended AND WS is connected
-      if (event.data.pcmData && isAudioCaptureActive && wsConnected && ws?.readyState === WebSocket.OPEN) {
-        sendPCMDataToServer(event.data.pcmData, isAudioCaptureActive, wsConnected, ws);
+      if (event.data.pcmData) {
+        processAudioChunk(event.data.pcmData);
       }
     };
-    audioWorkletNode = workletNode; // Assign to global variable
-    debug("Using AudioWorklet.");
+    
+    audioWorkletNode = workletNode;
+    UI.debug("Using AudioWorklet for audio processing.");
     return workletNode;
   } catch (err) {
     console.error("AudioWorklet setup failed:", err);
-    debug(`AudioWorklet setup failed: ${err.message}`);
-    if (audioWorkletNode) { 
-      try { audioWorkletNode.disconnect(); } catch(e){} 
-      audioWorkletNode = null; 
-    }
-    return null; // Indicate failure
+    UI.debug(`AudioWorklet setup failed: ${err.message}`);
+    return null;
   }
 }
 
-
-// Set up ScriptProcessor fallback for audio processing
-function setupScriptProcessor(ctx, source, isAudioCaptureActive, wsConnected, ws) {
-  debug("Setting up ScriptProcessor...");
-  const bufferSize = 16384; // Or another power of 2
-  if (!ctx.createScriptProcessor) {
-    console.error("ScriptProcessorNode is not supported.");
-    debug("ScriptProcessorNode is not supported.");
-    return false; // Indicate failure
-  }
-  try {
-    scriptProcessorNode = ctx.createScriptProcessor(bufferSize, 1, 1);
-    debug("ScriptProcessorNode created.");
-    scriptProcessorNode.onaudioprocess = (e) => {
-      // Check isAudioCaptureActive and wsConnected
-      if (isAudioCaptureActive && wsConnected && ws?.readyState === WebSocket.OPEN) {
-        const inputData = e.inputBuffer.getChannelData(0);
-        // Create a copy before sending if data needs to persist beyond this event
-        sendPCMDataToServer(new Float32Array(inputData), isAudioCaptureActive, wsConnected, ws);
-      }
-    };
-    debug("Using ScriptProcessor.");
-    return scriptProcessorNode;
-  } catch (err) {
-    console.error("Error setting up ScriptProcessor:", err);
-    debug(`Error setting up ScriptProcessor: ${err.message}`);
-    if (scriptProcessorNode) { 
-      try { scriptProcessorNode.disconnect(); } catch(e) {} 
-    }
-    scriptProcessorNode = null;
-    return false; // Indicate failure
-  }
-}
-
-
-// Clean up audio processing resources
-function cleanupAudioProcessing(reason) {
-  debug(`Cleaning up audio processing resources. Reason: ${reason}`);
-  // Check if cleanup is actually needed
-  if (!isRecording && !sourceNode && !audioStream && !audioWorkletNode && !scriptProcessorNode) {
-    debug("Cleanup called but no active resources found.");
-    return;
-  }
-
-  const wasRecording = isRecording; // Store state before changing
-  isRecording = false; // Mark processing as stopped *first*
-  debug(`isRecording set to false (was ${wasRecording}).`);
-
-  // Stop microphone track first
-  if (audioStream) {
-    debug("Stopping audio stream tracks.");
-    audioStream.getTracks().forEach(track => {
-      try { track.stop(); } catch(e) { console.warn("Error stopping track:", e); }
-    });
-    audioStream = null;
-  }
-
-  // Disconnect and nullify nodes
-  if (audioWorkletNode) {
-    debug("Disconnecting AudioWorkletNode.");
-    try {
-      audioWorkletNode.port.close();
-      audioWorkletNode.disconnect();
-    } catch(e) { console.warn("Error disconnecting audioWorkletNode:", e); }
-    audioWorkletNode = null;
-  }
-  if (scriptProcessorNode) {
-    debug("Disconnecting ScriptProcessorNode.");
-    try {
-      scriptProcessorNode.disconnect();
-      scriptProcessorNode.onaudioprocess = null;
-    } catch(e) { console.warn("Error disconnecting scriptProcessorNode:", e); }
-    scriptProcessorNode = null;
-  }
-  if (sourceNode) {
-    debug("Disconnecting sourceNode.");
-    try { sourceNode.disconnect(); } catch(e) { console.warn("Error disconnecting sourceNode:", e); }
-    sourceNode = null;
-  }
-  debug("Finished cleaning up audio processing resources.");
-}
-
-
-// Send PCM data to the server
-function sendPCMDataToServer(float32Data, isAudioCaptureActive, wsConnected, ws) {
-  if (!float32Data || float32Data.length === 0) {
-    return;
-  }
-
-  try {
-    // Basic voice activity detection to reduce silent packets
-    const sum = float32Data.reduce((acc, val) => acc + Math.abs(val), 0);
-    const avg = sum / float32Data.length;
-    const isVoice = avg > 0.005; // Adjust threshold as needed
-
-    // Skip some silence packets (send ~25% of silence)
-    if (!isVoice && Math.random() > 0.25) {
-      return;
-    }
-    
-    // Convert to Int16 format
-    const int16Data = new Int16Array(float32Data.length);
-    for (let i = 0; i < float32Data.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Data[i]));
-      int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-
-    // Add to batch buffer
-    audioChunkBuffer.push(int16Data.buffer);
-    
-    // Start timer if not running
-    if (!audioChunkTimer) {
-      audioChunkTimer = setTimeout(() => {
-        if (audioChunkBuffer.length > 0 && isAudioCaptureActive && 
-            wsConnected && ws?.readyState === WebSocket.OPEN) {
-          
-          // Combine buffers if multiple chunks available
-          let dataToSend;
-          if (audioChunkBuffer.length > 1) {
-            dataToSend = concatAudioBuffers(audioChunkBuffer);
-            debug(`Sending batched audio: ${audioChunkBuffer.length} chunks (${dataToSend.byteLength} bytes)`);
-          } else {
-            // Just send the single buffer directly
-            dataToSend = audioChunkBuffer[0];
-            debug(`Sending single audio chunk (${dataToSend.byteLength} bytes)`);
-          }
-          
-          // Send the data
-          ws.send(dataToSend);
-        } else if (audioChunkBuffer.length > 0) {
-          debug(`Dropped ${audioChunkBuffer.length} audio chunks - connection not ready`);
-        }
-        
-        // Reset buffer and timer
-        audioChunkBuffer = [];
-        audioChunkTimer = null;
-      }, BATCH_INTERVAL_MS);
-    }
-    
-  } catch (err) {
-    debug(`Error processing PCM data: ${err.message}`);
-    console.error("Error in sendPCMDataToServer:", err);
-    
-    // Reset buffer and timer in case of error
-    audioChunkBuffer = [];
-    if (audioChunkTimer) {
-      clearTimeout(audioChunkTimer);
-      audioChunkTimer = null;
-    }
-  }
-}
-
-
-// Combine multiple audio buffers into one
-function concatAudioBuffers(buffers) {
-  // Calculate total length
-  const totalLength = buffers.reduce((acc, buf) => acc + buf.byteLength, 0);
-  const result = new ArrayBuffer(totalLength);
-  const view = new Uint8Array(result);
+// Process audio chunks and send to server
+function processAudioChunk(audioData) {
+  // Add to buffer
+  audioChunkBuffer.push(new Float32Array(audioData));
   
-  // Copy data
+  // Set up timer to send batches if not already running
+  if (!audioChunkTimer) {
+    audioChunkTimer = setInterval(() => {
+      if (audioChunkBuffer.length > 0) {
+        // Convert and send
+        const combinedData = combineAudioChunks(audioChunkBuffer);
+        sendAudioChunk(combinedData);
+        // Clear buffer
+        audioChunkBuffer = [];
+      }
+    }, BATCH_INTERVAL_MS);
+  }
+}
+
+// Combine audio chunks into a single Float32Array
+function combineAudioChunks(chunks) {
+  // Calculate total length
+  let totalLength = 0;
+  for (const chunk of chunks) {
+    totalLength += chunk.length;
+  }
+  
+  // Create combined array
+  const result = new Float32Array(totalLength);
   let offset = 0;
-  for (const buffer of buffers) {
-    view.set(new Uint8Array(buffer), offset);
-    offset += buffer.byteLength;
+  
+  // Copy each chunk
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
   }
   
   return result;
 }
 
-
-// -----------------------------------------
-// Toggle audio capture
-// -----------------------------------------
-async function toggleAudioCapture() {
-  UI.debug(`toggleAudioCapture called. isAudioCaptureActive: ${isAudioCaptureActive}`);
-  if (isAudioCaptureActive) {
-    stopCapture();
-  } else {
-    await startCapture();
-  }
-}
-
-/**
- * Start audio capture
- */
-async function startCapture() {
-  UI.debug("Attempting to start audio capture...");
-
-  // Add a temporary disabled state for the button while setup happens
-  UI.elements.recordBtn.disabled = true;
-
-  // Resume AudioContext if needed
-  try {
-    const ctx = Audio.getAudioContext();
-    if (ctx.state === 'suspended') {
-      UI.debug("AudioContext is suspended, attempting to resume before capture...");
-      await ctx.resume();
-      UI.debug(`AudioContext resumed. State: ${ctx.state}`);
-      if (ctx.state !== 'running') {
-        throw new Error(`AudioContext failed to resume (${ctx.state})`);
-      }
-    }
-  } catch (err) {
-    console.error("Error resuming AudioContext before capture:", err);
-    handleAudioCaptureError(`Audio Resume Error: ${err.message}`);
-    return; // Stop if resume fails
-  }
-
-  // Reset state for new audio capture session
-  resetChatStateForNewCapture();
-
-  // Ensure WebSocket is ready
-  if (!WebSocket.isWebSocketConnected()) {
-    UI.debug("WebSocket not ready, attempting to initialize...");
-    WebSocket.initWebSocket(async () => {
-      // Set state *before* async setup call
-      isAudioCaptureActive = true;
-      UI.updateButtonUI(true);
-      await setupCapture();
-    });
-    return; // Wait for the callback
-  }
-
-  // If WS was already connected
-  isAudioCaptureActive = true;
-  UI.updateButtonUI(true);
-  await setupCapture();
-}
-
-/**
- * Reset chat state for new capture session
- */
-function resetChatStateForNewCapture() {
-  // Reset UI state
-  WebSocket.setCurrentUserSpeechBubble(null);
-  WebSocket.setLastAiElem(null);
-}
-
-/**
- * Set up audio capture
- */
-async function setupCapture() {
-  const ws = WebSocket.getWebSocket();
-  const wsConnected = WebSocket.isWebSocketConnected();
-  
-  const success = await Audio.setupAudioProcessing(isAudioCaptureActive, wsConnected, ws);
-  if (!success) {
-    handleAudioCaptureError("Failed to set up audio processing");
-  }
-}
-
-/**
- * Stop audio capture
- */
-function stopCapture() {
-  if (!isAudioCaptureActive) {
-    UI.debug("stopCapture called but not active.");
+function sendAudioChunk(audioData) {
+  if (!WSClient.isConnected()) {
+    UI.debug("Cannot send audio: WebSocket not connected");
     return;
   }
-  UI.debug("Stopping audio capture (user request).");
-  isAudioCaptureActive = false;
-  UI.updateButtonUI(false);
+
+  try {
+    // Convert Float32Array to Int16Array for more efficient transmission
+    const pcm16 = convertFloat32ToInt16(audioData);
+    
+    // Send binary data directly
+    WSClient.ws.send(pcm16.buffer);
+  } catch (err) {
+    UI.debug(`Error sending audio: ${err.message}`);
+    console.error("Error sending audio:", err);
+  }
+}
+
+// Helper function to convert audio format
+function convertFloat32ToInt16(float32Array) {
+  const int16Array = new Int16Array(float32Array.length);
   
-  // Send speech_end signal to server
-  if (WebSocket.sendSpeechEndSignal()) {
-    // Signal sent successfully
+  for (let i = 0; i < float32Array.length; i++) {
+    // Convert float32 [-1.0, 1.0] to int16 [-32768, 32767]
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
   
-  // Clean up audio processing resources
-  Audio.cleanupAudioProcessing("User stopped capture");
+  return int16Array;
 }
 
-/**
- * Handle audio capture errors
- */
-function handleAudioCaptureError(errorMessage) {
-  UI.debug(`handleAudioCaptureError called. Error: ${errorMessage}`);
-  console.error("Audio Capture Error:", errorMessage);
-  Audio.cleanupAudioProcessing(`Error: ${errorMessage}`);
+// Cleanup audio resources
+function cleanupAudioResources() {
+  UI.debug("Cleaning up audio resources");
+  
+  // Clear batch timer
+  if (audioChunkTimer) {
+    clearInterval(audioChunkTimer);
+    audioChunkTimer = null;
+  }
+  
+  // Disconnect audio nodes
+  if (sourceNode) {
+    sourceNode.disconnect();
+    sourceNode = null;
+  }
+  
+  if (audioWorkletNode) {
+    audioWorkletNode.disconnect();
+    audioWorkletNode = null;
+  }
+  
+  if (scriptProcessorNode) {
+    scriptProcessorNode.disconnect();
+    scriptProcessorNode = null;
+  }
+  
+  // Stop media stream tracks
+  if (audioStream) {
+    audioStream.getTracks().forEach(track => track.stop());
+    audioStream = null;
+  }
+  
+  isRecording = false;
+  audioChunkBuffer = [];
+}
+
+// Start audio capture
+function startAudioCapture(wsConnected, ws) {
+  if (isRecording) return;
+  
+  isAudioCaptureActive = true;
+  UI.updateButtonUI(true);
+  
+  // Send speech_start signal
+  sendSpeechStartSignal();
+  
+  // Set up audio processing
+  setupAudioProcessing(isAudioCaptureActive, wsConnected, ws);
+}
+
+// Stop audio capture
+function stopAudioCapture() {
+  if (!isAudioCaptureActive) return;
+  
   isAudioCaptureActive = false;
   UI.updateButtonUI(false);
-  UI.elements.recordBtn.disabled = false;
+  
+  // Send speech_end signal
+  sendSpeechEndSignal();
+  
+  cleanupAudioResources();
 }
 
 
-// Check if the audio system is recording
-function getIsRecording() {
-  return isRecording;
+// Add this function to wsclient.js
+function sendSpeechStartSignal() {
+  try {
+    if (!WSClient.isConnected()) {
+      UI.debug("Cannot send speech_start: WebSocket not connected");
+      return false;
+    }
+    
+    UI.debug("Sending speech_start signal to server");
+    WSClient.ws.send(JSON.stringify({
+      type: "speech_start"
+    }));
+    return true;
+  } catch (err) {
+    UI.debug(`Error sending speech_start: ${err.message}`);
+    console.error("Error sending speech_start:", err);
+    return false;
+  }
 }
 
+function sendSpeechEndSignal() {
+  try {
+    if (!WSClient.isConnected()) {
+      UI.debug("Cannot send speech_end: WebSocket not connected");
+      return false;
+    }
+    
+    UI.debug("Sending speech_end signal to server");
+    WSClient.ws.send(JSON.stringify({
+      type: "speech_end"
+    }));
+    return true;
+  } catch (err) {
+    UI.debug(`Error sending speech_end: ${err.message}`);
+    console.error("Error sending speech_end:", err);
+    return false;
+  }
+}
+
+// Fallback: Setup ScriptProcessor for older browsers
+function setupScriptProcessor(ctx, source) {
+  try {
+    UI.debug("Falling back to ScriptProcessor");
+    
+    // Create script processor node (buffer size must be power of 2)
+    const bufferSize = 8192; // 8kHz
+    const scriptNode = ctx.createScriptProcessor(bufferSize, 1, 1);
+    
+    scriptNode.onaudioprocess = (audioProcessEvent) => {
+      const inputBuffer = audioProcessEvent.inputBuffer;
+      const inputData = inputBuffer.getChannelData(0);
+      processAudioChunk(inputData);
+    };
+    
+    scriptProcessorNode = scriptNode;
+    return scriptNode;
+  } catch (err) {
+    console.error("ScriptProcessor setup failed:", err);
+    UI.debug(`ScriptProcessor setup failed: ${err.message}`);
+    return null;
+  }
+}
 // --------------------------------------
 // Export public API
 // --------------------------------------
 
 export {
-  getAudioContext,
+  startAudioCapture,
+  stopAudioCapture,
   playAudioChunk,
-  setupAudioProcessing,
-  cleanupAudioProcessing,
-  getIsRecording,
-  toggleAudioCapture
+  isRecording
 };

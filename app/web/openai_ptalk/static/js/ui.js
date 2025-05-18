@@ -2,6 +2,10 @@
 
 // Cache DOM elements
 const elements = {
+  startupScreen: document.getElementById('startup-screen'),
+  startupCircle: document.getElementById('startup-circle'),
+  startupText: document.getElementById('startup-text'),
+  appContainer: document.getElementById('app-container'),
   connectBtn: document.getElementById("connect"), // buttons at the bottom
   inputEl: document.getElementById("input"), // text input bar at the bottom
   sendBtn: document.getElementById("send"), // text send buttons at the bottom
@@ -19,11 +23,38 @@ let connectionState = "DISCONNECTED"; // "DISCONNECTED", "CONNECTING", "CONNECTE
 
 // Initialize UI elements and set up initial state
 function initializeUI() {
+  elements.startupScreen.classList.remove('hidden'); // Show startup screen
+  elements.appContainer.classList.add('hidden');    // Ensure app container is hidden
+  elements.appContainer.classList.remove('visible');
   updateConnectionUI("DISCONNECTED");
+  
+  // Add window resize handler to adjust message container height
+  window.addEventListener('resize', adjustMessageContainerHeight);
 }
 
-// Reset UI state after an error
+// adjust height of the message container
+function adjustMessageContainerHeight() {
+  const headerHeight = document.querySelector('.app-header').offsetHeight;
+  const controlsHeight = document.querySelector('.input-controls-section').offsetHeight;
+  
+  // Calculate and set the messages container height
+  const messagesHeight = window.innerHeight - headerHeight - controlsHeight;
+  document.getElementById('messages').style.height = `${messagesHeight}px`;
+}
 
+// transition from the startup screen to the main app
+function showChatScreen() {
+  elements.startupScreen.classList.add('hidden'); // Start fading out startup screen
+
+  // Make app container ready for transition
+  elements.appContainer.classList.remove('hidden'); 
+  // Force a reflow/repaint before adding 'visible' to ensure transition plays
+  void elements.appContainer.offsetWidth; 
+  elements.appContainer.classList.add('visible'); // Trigger transition
+
+  adjustMessageContainerHeight(); // Adjust height now that it's becoming visible
+  elements.inputEl.focus(); // Optional: focus input field
+}
 
 // Update UI based on connection state
 function updateConnectionUI(state) {
@@ -54,26 +85,39 @@ function updateConnectionUI(state) {
 // Record button UI management
 function updateButtonUI(isActive) {
   if (isActive) {
-    elements.recordBtn.classList.remove('bg-indigo-500');
-    elements.recordBtn.classList.add('bg-red-500');
-    elements.recordBtn.innerHTML = '<span class="mr-2">⏹️</span> Stop';
+    // Use classes instead of inline styles
+    elements.recordBtn.classList.add('recording');
+    
+    // Change to send icon when recording with a smaller size
+    elements.recordBtn.innerHTML = `
+      <svg class="send-icon-recording" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+      </svg>
+    `;
   } else {
-    elements.recordBtn.classList.add('bg-indigo-500');
-    elements.recordBtn.classList.remove('bg-red-500');
-    elements.recordBtn.innerHTML = '<span class="mr-2">🎤</span> Talk';
+    // Remove the recording class
+    elements.recordBtn.classList.remove('recording');
+    
+    // Restore to mic icon when not recording
+    elements.recordBtn.innerHTML = `
+      <svg class="mic-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"></path>
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"></path>
+      </svg>
+    `;
   }
   elements.recordBtn.disabled = false;
 }
-
 
  // Create a new message bubble in the chat
 function createMessageBubble(sender, initialText) {
   const bubbleDiv = document.createElement("div");
   bubbleDiv.textContent = initialText;
   if (sender === "user") {
-    bubbleDiv.className = "self-end bg-blue-100 rounded p-2 max-w-xs";
+    // Only use the base classes, not Tailwind classes since we defined them in CSS
+    bubbleDiv.className = "message-bubble user-message";
   } else { // AI
-    bubbleDiv.className = "self-start bg-gray-100 rounded p-2 max-w-xs";
+    bubbleDiv.className = "message-bubble ai-message";
   }
   elements.messagesDiv.appendChild(bubbleDiv);
   scrollToBottom();
@@ -90,11 +134,25 @@ function scrollToBottom() {
 
 function debug(msg) {
   if (!DEBUG) return;
+  
   console.log(msg);
-  elements.debugEl.classList.remove("hidden");
-  elements.debugEl.textContent += msg + "\n";
-  if (elements.debugEl.textContent.length > 1000) {
-    elements.debugEl.textContent = elements.debugEl.textContent.slice(-1000);
+  
+  // Make sure the debug element exists
+  if (elements.debugEl) {
+    
+    // Append message with timestamp
+    const timestamp = new Date().toLocaleTimeString();
+    elements.debugEl.textContent += `[${timestamp}] ${msg}\n`;
+    
+    // Trim if content gets too long
+    if (elements.debugEl.textContent.length > 5000) {
+      const lines = elements.debugEl.textContent.split('\n');
+      // Keep the last 50 lines
+      elements.debugEl.textContent = lines.slice(-50).join('\n');
+    }
+    
+    // Auto-scroll to bottom
+    elements.debugEl.scrollTop = elements.debugEl.scrollHeight;
   }
 }
 
@@ -111,7 +169,9 @@ export {
   createMessageBubble,
   debug,
   scrollToBottom,
-  connectionState
+  connectionState,
+  adjustMessageContainerHeight,
+  showChatScreen
 };
 
 // Allow other modules to update these states

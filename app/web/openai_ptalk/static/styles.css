@@ -1,6 +1,535 @@
-/* 
-This file is for custom CSS rules.
-Tailwind CSS is currently loaded via CDN in index.html,
-so this file is primarily for styles not covered by Tailwind utilities
-or for overriding default styles if needed.
-*/
+/*============================================================================*/
+/*                               VARIABLES                                    */
+/*============================================================================*/
+:root {
+  --background-dark: #121212;
+  --text-color: #ffffff;
+  --discovery-pink: #ED186B;
+  --discovery-pink-transparent: rgba(237, 24, 107, 0.35);
+  --pingan-orange: #F05A23;
+  --pingan-orange-transparent: rgba(240, 90, 35, 0.35);
+  --record-green: #10b981;
+  --record-green-dark: #059669;
+}
+
+/*============================================================================*/
+/*                           BASE STYLING & LAYOUT                            */
+/*============================================================================*/
+/* Base styling */
+body {
+  background-color: var(--background-dark);
+  color: var(--text-color);
+  margin: 0;
+  font-family: 'Hind Vadodara', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* App container */
+#app-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+   /* Transition properties */
+  opacity: 0;
+  transform: translateY(40px); /* Start slightly offset downwards */
+  transition: opacity 0.35s ease-out, transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  z-index: 1000;
+}
+
+/* control visibility via JS */
+#app-container.visible {
+  opacity: 1;
+  transform: translateY(0);
+  display: flex !important; /* Ensure it's flex when visible */
+}
+
+/* Ensure .hidden on #app-container truly hides it initially */
+#app-container.hidden {
+  display: none !important;
+  opacity: 0;
+}
+
+/* Left section - Chat container (2/3) */
+#chat-section {
+  width: 66.67%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden; /* Prevent overflow from inner elements */
+}
+
+/* Right section - Profile area (1/3) */
+#profile-section {
+  width: 33.33%;
+  height: 100%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+/* App header styling */
+.app-header {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 28px;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0; /* Prevent header from shrinking */
+
+  /* Gradient text styling */
+  background: linear-gradient(to right, var(--pingan-orange) 35%, var(--discovery-pink) 65%);;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.startup-header-override {
+  border-bottom: none; /* No border for startup header */
+  font-size: 32px; /* Slightly larger for emphasis */
+  margin-bottom: 60px; /* More space below header */
+}
+
+
+/*============================================================================*/
+/*                              STARTUP SCREEN                                */
+/*============================================================================*/
+#startup-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--background-dark);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000; /* On top of other content */
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+#startup-screen.hidden {
+  opacity: 0;
+  pointer-events: none; /* Disable interaction when hidden */
+}
+
+#startup-circle {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  /* Adjusted gradient for a more gradual transition */
+  background: linear-gradient(135deg, var(--pingan-orange) 25%, var(--discovery-pink) 75%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  animation: pulse-startup 2.5s infinite ease-in-out;
+  /* Updated box-shadow for blended glow */
+  box-shadow:
+    /* 1. Subtle Line Glow / Bright Edge - slightly transparent white */
+    0 0 2px 0.5px rgba(255, 248, 240, 0.7), /* Softer edge glow */
+    /* 2. Primary Orange Glow - semi-transparent for blending */
+    0 0 18px 3px rgba(240, 90, 35, 0.35),   /* PingAn Orange with alpha */
+    /* 3. Primary Pink Glow - semi-transparent for blending */
+    0 0 18px 3px rgba(237, 24, 107, 0.35),  /* Discovery Pink with alpha */
+    /* 4. Wider Softer Orange Glow - more transparent */
+    0 0 45px 8px rgba(240, 90, 35, 0.15),
+    /* 5. Wider Softer Pink Glow - more transparent */
+    0 0 45px 8px rgba(237, 24, 107, 0.15);
+}
+
+#startup-text {
+  color: var(--text-color);
+  font-size: 20px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes pulse-startup {
+  0%, 100% {
+    transform: scale(0.95);
+    box-shadow:
+      /* 1. Subtle Line Glow / Bright Edge */
+      0 0 2px 0.5px rgba(255, 248, 240, 0.7),
+      /* 2. Primary Orange Glow */
+      0 0 18px 3px rgba(240, 90, 35, 0.35),
+      /* 3. Primary Pink Glow */
+      0 0 18px 3px rgba(237, 24, 107, 0.35),
+      /* 4. Wider Softer Orange Glow */
+      0 0 45px 8px rgba(240, 90, 35, 0.15),
+      /* 5. Wider Softer Pink Glow */
+      0 0 45px 8px rgba(237, 24, 107, 0.15);
+  }
+  50% {
+    transform: scale(1);
+    box-shadow:
+      /* 1. Line Glow - brighter */
+      0 0 3px 0.75px rgba(255, 248, 240, 0.9),
+      /* 2. Primary Orange Glow - brighter/wider */
+      0 0 25px 4px rgba(240, 90, 35, 0.55),
+      /* 3. Primary Pink Glow - brighter/wider */
+      0 0 25px 4px rgba(237, 24, 107, 0.55),
+      /* 4. Wider Softer Orange Glow - brighter/wider */
+      0 0 60px 10px rgba(240, 90, 35, 0.25),
+      /* 5. Wider Softer Pink Glow - brighter/wider */
+      0 0 60px 10px rgba(237, 24, 107, 0.25);
+  }
+}
+
+
+/*============================================================================*/
+/*                            MESSAGES CONTAINER                              */
+/*============================================================================*/
+/* Message container styling */
+#messages {
+  height: calc(100vh - 220px); /* Viewport height minus header and input controls */
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background-color: transparent;
+  gap: 12px;
+  
+  /* Custom scrollbar styling - keep this part */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Custom scrollbar for WebKit browsers (Chrome, Safari) */
+#messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+#messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#messages::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+}
+
+#messages::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/*============================================================================*/
+/*                          COMBINED INPUT CONTROLS                           */
+/*============================================================================*/
+/* Combined input and controls section */
+.input-controls-section {
+  height: 150px; /* Fixed height for controls + input */
+  background-color: transparent;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0; /* Prevent this section from shrinking */
+  position: relative; /* Regular positioning, not absolute */
+  z-index: 5;
+}
+
+/* Controls row with record button */
+.controls-row {
+  height: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background: transparent; 
+}
+
+/* Talk button container */
+.talk-button-container {
+  display: flex;
+  justify-content: center;
+  z-index: 5;
+}
+
+/* Talk button styling */
+#record {
+  background: radial-gradient(circle at center, var(--pingan-orange), #d13800);
+  border: none;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 25px rgba(240, 90, 35, 0.5);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+#record:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(240, 90, 35, 0.7);
+}
+
+/* Recording state styling */
+#record.recording {
+  background: radial-gradient(circle at center, var(--record-green), var(--record-green-dark));
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+  animation: pulse 1.2s infinite;
+}
+
+#record.recording:hover {
+  box-shadow: 0 0 35px rgba(16, 185, 129, 0.8);
+}
+
+/* Pulsing animation for recording */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.8);
+    transform: scale(1.08);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+    transform: scale(1);
+  }
+}
+
+/* Microphone icon */
+.mic-icon {
+  width: 28px;
+  height: 28px;
+  fill: white;
+}
+
+/* Send icon during recording - smaller size */
+.send-icon-recording {
+  width: 22px;
+  height: 22px;
+  fill: white;
+}
+
+/*============================================================================*/
+/*                             INPUT ROW STYLING                              */
+/*============================================================================*/
+/* Bottom input row */
+.input-row {
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-grow: 1; /* Allow to take remaining space */
+}
+
+/* Status indicator - reposition to be inside the input-controls-section */
+#status {
+  position: relative; /* Not absolute */
+  padding: 4px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+/* Text input wrapper to group input and send button */
+.text-input-wrapper {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  margin-right: 10px;
+}
+
+/* Text input styling */
+#input {
+  flex: 1;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 8px 40px 8px 15px;
+  color: var(--text-color);
+}
+
+#input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* WhatsApp-style send button */
+#send {
+  background: transparent;
+  border: none;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.send-icon {
+  width: 24px;
+  height: 24px;
+  fill: var(--pingan-orange);
+}
+
+/* Connect button styling */
+.connect-btn {
+  background: linear-gradient(45deg, var(--pingan-orange), #ff7b00);
+  border: none;
+  border-radius: 20px;
+  padding: 8px 15px;
+  font-size: 14px;
+  color: white;
+  box-shadow: 0 0 10px rgba(240, 90, 35, 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.connect-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 15px rgba(240, 90, 35, 0.4);
+}
+
+/*============================================================================*/
+/*                            MESSAGE BUBBLE STYLING                          */
+/*============================================================================*/
+/* Base message bubble styling */
+.message-bubble {
+  color: white;
+  border-radius: 18px;
+  padding: 12px 16px;
+  margin: 4px 0;
+  word-wrap: break-word;
+  max-width: 80%;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  line-height: 1.4;
+}
+
+/* User message styling - PingAn orange with subtle gradient and border */
+.user-message {
+  background: linear-gradient(
+    135deg,
+    rgba(240, 90, 35, 0.7) 0%,
+    rgba(237, 24, 107, 0.7) 100%
+  );
+
+  /* border: 1px solid rgba(240, 90, 35, 0.3); */
+  margin-left: auto;
+  margin-right: 12px;
+  border-bottom-right-radius: 4px;
+  border-top-right-radius: 18px;
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+  text-align: right;
+}
+
+/* AI message styling - Discovery pink with subtle gradient and border */
+.ai-message {
+  background: linear-gradient(
+    135deg,
+    rgba(48, 48, 48, 0.8) 0%,
+    rgba(48, 48, 48, 0.8) 100%
+  );
+  /* border: 1px solid rgba(237, 24, 107, 0.3); */
+  margin-right: auto;
+  margin-left: 12px;
+  border-bottom-left-radius: 4px;
+  border-top-right-radius: 18px;
+  border-top-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+  text-align: left;
+}
+
+/*============================================================================*/
+/*                              PROFILE SECTION                               */
+/*============================================================================*/
+/* Profile placeholder */
+.profile-placeholder {
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.profile-placeholder h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+  color: var(--pingan-orange);
+}
+
+.profile-placeholder p {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/*============================================================================*/
+/*                              DEBUG SECTION                                 */
+/*============================================================================*/
+/* Debug panel styling */
+#debug {
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #00ff00;
+  font-family: monospace;
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+/* General utility class for hiding elements */
+.hidden {
+  display: none;
+}
+
+/*============================================================================*/
+/*                            RESPONSIVE DESIGN                               */
+/*============================================================================*/
+/* Media query for mobile screens */
+@media (max-width: 768px) {
+  #app-container {
+    flex-direction: column;
+  }
+  
+  #chat-section {
+    width: 100%;
+    height: 100%;
+  }
+  
+  #messages {
+    height: calc(100vh - 200px); /* Slightly adjusted for mobile */
+  }
+  
+  #profile-section {
+    display: none; /* Hide profile section on mobile */
+  }
+  
+  .input-row {
+    padding: 10px;
+  }
+  
+  .connect-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

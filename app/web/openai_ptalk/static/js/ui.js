@@ -2,6 +2,10 @@
 
 // Cache DOM elements
 const elements = {
+  startupScreen: document.getElementById('startup-screen'),
+  startupCircle: document.getElementById('startup-circle'),
+  startupText: document.getElementById('startup-text'),
+  appContainer: document.getElementById('app-container'),
   connectBtn: document.getElementById("connect"), // buttons at the bottom
   inputEl: document.getElementById("input"), // text input bar at the bottom
   sendBtn: document.getElementById("send"), // text send buttons at the bottom
@@ -19,16 +23,16 @@ let connectionState = "DISCONNECTED"; // "DISCONNECTED", "CONNECTING", "CONNECTE
 
 // Initialize UI elements and set up initial state
 function initializeUI() {
+  elements.startupScreen.classList.remove('hidden'); // Show startup screen
+  elements.appContainer.classList.add('hidden');    // Ensure app container is hidden
+  elements.appContainer.classList.remove('visible');
   updateConnectionUI("DISCONNECTED");
   
   // Add window resize handler to adjust message container height
   window.addEventListener('resize', adjustMessageContainerHeight);
-  
-  // Initial adjustment
-  adjustMessageContainerHeight();
 }
 
-// Add this new function
+// adjust height of the message container
 function adjustMessageContainerHeight() {
   const headerHeight = document.querySelector('.app-header').offsetHeight;
   const controlsHeight = document.querySelector('.input-controls-section').offsetHeight;
@@ -38,6 +42,19 @@ function adjustMessageContainerHeight() {
   document.getElementById('messages').style.height = `${messagesHeight}px`;
 }
 
+// transition from the startup screen to the main app
+function showChatScreen() {
+  elements.startupScreen.classList.add('hidden'); // Start fading out startup screen
+
+  // Make app container ready for transition
+  elements.appContainer.classList.remove('hidden'); 
+  // Force a reflow/repaint before adding 'visible' to ensure transition plays
+  void elements.appContainer.offsetWidth; 
+  elements.appContainer.classList.add('visible'); // Trigger transition
+
+  adjustMessageContainerHeight(); // Adjust height now that it's becoming visible
+  elements.inputEl.focus(); // Optional: focus input field
+}
 
 // Update UI based on connection state
 function updateConnectionUI(state) {
@@ -153,7 +170,8 @@ export {
   debug,
   scrollToBottom,
   connectionState,
-  adjustMessageContainerHeight
+  adjustMessageContainerHeight,
+  showChatScreen
 };
 
 // Allow other modules to update these states

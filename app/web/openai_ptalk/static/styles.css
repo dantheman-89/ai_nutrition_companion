@@ -20,7 +20,7 @@ body {
   background-color: var(--background-dark);
   color: var(--text-color);
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Hind Vadodara', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   height: 100vh;
   overflow: hidden;
 }
@@ -31,6 +31,24 @@ body {
   height: 100vh;
   width: 100%;
   position: relative;
+   /* Transition properties */
+  opacity: 0;
+  transform: translateY(40px); /* Start slightly offset downwards */
+  transition: opacity 0.35s ease-out, transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+  z-index: 1000;
+}
+
+/* control visibility via JS */
+#app-container.visible {
+  opacity: 1;
+  transform: translateY(0);
+  display: flex !important; /* Ensure it's flex when visible */
+}
+
+/* Ensure .hidden on #app-container truly hides it initially */
+#app-container.hidden {
+  display: none !important;
+  opacity: 0;
 }
 
 /* Left section - Chat container (2/3) */
@@ -71,6 +89,101 @@ body {
   background-clip: text;
   color: transparent;
 }
+
+.startup-header-override {
+  border-bottom: none; /* No border for startup header */
+  font-size: 32px; /* Slightly larger for emphasis */
+  margin-bottom: 60px; /* More space below header */
+}
+
+
+/*============================================================================*/
+/*                              STARTUP SCREEN                                */
+/*============================================================================*/
+#startup-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--background-dark);
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000; /* On top of other content */
+  opacity: 1;
+  transition: opacity 0.3s ease-out;
+}
+
+#startup-screen.hidden {
+  opacity: 0;
+  pointer-events: none; /* Disable interaction when hidden */
+}
+
+#startup-circle {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  /* Adjusted gradient for a more gradual transition */
+  background: linear-gradient(135deg, var(--pingan-orange) 25%, var(--discovery-pink) 75%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  animation: pulse-startup 2.5s infinite ease-in-out;
+  /* Updated box-shadow for blended glow */
+  box-shadow:
+    /* 1. Subtle Line Glow / Bright Edge - slightly transparent white */
+    0 0 2px 0.5px rgba(255, 248, 240, 0.7), /* Softer edge glow */
+    /* 2. Primary Orange Glow - semi-transparent for blending */
+    0 0 18px 3px rgba(240, 90, 35, 0.35),   /* PingAn Orange with alpha */
+    /* 3. Primary Pink Glow - semi-transparent for blending */
+    0 0 18px 3px rgba(237, 24, 107, 0.35),  /* Discovery Pink with alpha */
+    /* 4. Wider Softer Orange Glow - more transparent */
+    0 0 45px 8px rgba(240, 90, 35, 0.15),
+    /* 5. Wider Softer Pink Glow - more transparent */
+    0 0 45px 8px rgba(237, 24, 107, 0.15);
+}
+
+#startup-text {
+  color: var(--text-color);
+  font-size: 20px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes pulse-startup {
+  0%, 100% {
+    transform: scale(0.95);
+    box-shadow:
+      /* 1. Subtle Line Glow / Bright Edge */
+      0 0 2px 0.5px rgba(255, 248, 240, 0.7),
+      /* 2. Primary Orange Glow */
+      0 0 18px 3px rgba(240, 90, 35, 0.35),
+      /* 3. Primary Pink Glow */
+      0 0 18px 3px rgba(237, 24, 107, 0.35),
+      /* 4. Wider Softer Orange Glow */
+      0 0 45px 8px rgba(240, 90, 35, 0.15),
+      /* 5. Wider Softer Pink Glow */
+      0 0 45px 8px rgba(237, 24, 107, 0.15);
+  }
+  50% {
+    transform: scale(1);
+    box-shadow:
+      /* 1. Line Glow - brighter */
+      0 0 3px 0.75px rgba(255, 248, 240, 0.9),
+      /* 2. Primary Orange Glow - brighter/wider */
+      0 0 25px 4px rgba(240, 90, 35, 0.55),
+      /* 3. Primary Pink Glow - brighter/wider */
+      0 0 25px 4px rgba(237, 24, 107, 0.55),
+      /* 4. Wider Softer Orange Glow - brighter/wider */
+      0 0 60px 10px rgba(240, 90, 35, 0.25),
+      /* 5. Wider Softer Pink Glow - brighter/wider */
+      0 0 60px 10px rgba(237, 24, 107, 0.25);
+  }
+}
+
 
 /*============================================================================*/
 /*                            MESSAGES CONTAINER                              */

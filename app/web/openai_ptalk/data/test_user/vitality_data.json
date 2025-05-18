@@ -17,9 +17,9 @@
     ],
     "health_checks": {
         "last_vitality_health_check": "2024-11-15",
-        "weight": 70,
-        "height": 175,
-        "bmi": 22.9,
+        "weight": 73,
+        "height": 179,
+        "bmi": 22.8,
         "blood_pressure": "Normal: 120/80",
         "glucose": "Normal: 4.9 mmol/L",
         "LDL cholesterol": "Normal: 2.8 mmol/L"

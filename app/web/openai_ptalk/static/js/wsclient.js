@@ -1,5 +1,5 @@
 // WebSocket Module - Handles communication with the server
-import { debug, createMessageBubble, scrollToBottom, connectionState, updateConnectionUI, elements} from './ui.js';
+import { debug, createMessageBubble, scrollToBottom, connectionState, updateConnectionUI, elements, updateProfileDisplay} from './ui.js';
 import { playAudioChunk, stopAudioCapture, } from './audio.js';
 
 // WebSocket state
@@ -91,6 +91,7 @@ function handleWebSocketMessage(e) {
       case "input_audio_transcript_delta": handleTranscriptDelta(data); break;
       case "input_audio_transcript_done": handleTranscriptDone(data); break;
       case "input_audio_buffer_committed": handleInputBufferCommitted(data); break;
+      case "profile_update":          updateProfileDisplay(data); break;
       case "error":                   handleServerError(data); break;
       default:
         // Log other potentially useful events if needed, but less verbosely

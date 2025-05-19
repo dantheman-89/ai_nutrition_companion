@@ -20,6 +20,7 @@ from config import SYSTEM_PROMPT, OPENAI_API_KEY
 from .tools import PROFILE_TOOL_DEFINITION, update_profile_json, LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap
 from .tools import CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets
 from .tools import USER_PROFILE_FILENAME
+from .send_to_client import prepare_profile_for_display
 
 # Set up logging with timestamps and log levels
 # Set up logging with timestamps and log levels
@@ -376,6 +377,18 @@ class RealtimeSession:
                     except Exception as send_error:
                         print(f"Error sending tool result back to OpenAI: {send_error}")
                         traceback.print_exc() # Print full traceback for debugging
+
+                    # --- Send function results to the front end to display ---
+                    if base_function_name in ["update_user_profile", "load_vitality_data", "calculate_daily_nutrition_targets"]:
+                        profile_display_data = await prepare_profile_for_display(self.user_data_dir)
+                        if profile_display_data: # Check if not empty            
+                            await self.websocket.send_json({
+                                "type": "profile_update",
+                                "data": profile_display_data 
+                            })
+                            print(f"Sent formatted profile_update to client after {base_function_name}")
+                        else:
+                            print(f"No profile data to display after {base_function_name}, or profile file was empty/invalid.")
 
                 # rate_lmit update
                 elif event.type in ("rate_limits.updated"):

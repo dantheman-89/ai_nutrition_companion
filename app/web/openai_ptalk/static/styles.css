@@ -10,6 +10,9 @@
   --pingan-orange-transparent: rgba(240, 90, 35, 0.35);
   --record-green: #10b981;
   --record-green-dark: #059669;
+  --ai-message-bg: rgba(48, 48, 48, 0.8); /* AI message and profile card background */
+  --profile-card-text-color: #E5E7EB; /* A light gray, close to white, for good contrast */
+  --profile-card-key-text-color: #D1D5DB; /* Slightly dimmer for keys */
 }
 
 /*============================================================================*/
@@ -67,11 +70,11 @@ body {
 #profile-section {
   width: 33.33%;
   height: 100%;
-  padding: 20px;
   display: flex;
   flex-direction: column;
   position: relative;
   z-index: 1;
+  background-color: var(--background-dark);
 }
 
 /* App header styling */
@@ -96,6 +99,29 @@ body {
   margin-bottom: 60px; /* More space below header */
 }
 
+/* Reusable custom scrollbar style */
+.custom-scrollbar {
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent; /* For Firefox */
+}
+
+/* Custom scrollbar for WebKit browsers (Chrome, Safari, Edge) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
 
 /*============================================================================*/
 /*                              STARTUP SCREEN                                */
@@ -197,28 +223,6 @@ body {
   flex-direction: column;
   background-color: transparent;
   gap: 12px;
-  
-  /* Custom scrollbar styling - keep this part */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-/* Custom scrollbar for WebKit browsers (Chrome, Safari) */
-#messages::-webkit-scrollbar {
-  width: 4px;
-}
-
-#messages::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-#messages::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-}
-
-#messages::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.3);
 }
 
 /*============================================================================*/
@@ -436,12 +440,7 @@ body {
 
 /* AI message styling - Discovery pink with subtle gradient and border */
 .ai-message {
-  background: linear-gradient(
-    135deg,
-    rgba(48, 48, 48, 0.8) 0%,
-    rgba(48, 48, 48, 0.8) 100%
-  );
-  /* border: 1px solid rgba(237, 24, 107, 0.3); */
+  background: var(--ai-message-bg);
   margin-right: auto;
   margin-left: 12px;
   border-bottom-left-radius: 4px;

@@ -1,6 +1,8 @@
 import json
 import pathlib
 from typing import Dict, Any
+from datetime import datetime, timedelta
+import copy
 
 # File paths
 USER_PROFILE_FILENAME = "user_profile.json"
@@ -162,10 +164,15 @@ async def update_profile_json(user_data_dir, fields_to_update: dict):
                 profile_data[field] = value
 
         # Calculate BMI if both height and weight are available
-        if "height" in fields_to_update and "weight" in fields_to_update:
+        if "height" in fields_to_update or "weight" in fields_to_update:
             if "basic_info" not in profile_data:
                 profile_data["basic_info"] = {}
-            profile_data["basic_info"]["bmi_kg_m2"] = calculate_bmi(fields_to_update["height"], fields_to_update["weight"])
+            # safely get current height and weight
+            basic_info_data = profile_data.get("basic_info", {})
+            current_height_cm = basic_info_data.get("height_cm")
+            current_weight_kg = basic_info_data.get("weight_kg")
+            if current_height_cm is not None and current_weight_kg is not None:
+                profile_data["basic_info"]["bmi_kg_m2"] = calculate_bmi(current_height_cm, current_weight_kg)
 
         # Check if we have all required fields to calculate nutrition targets
         profile_data = check_goal_calculation_readiness(profile_data)
@@ -208,6 +215,7 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
     """
     vitality_data_path = user_data_dir / VITALITY_DATA_FILENAME
     user_profile_path = user_data_dir / USER_PROFILE_FILENAME
+    system_message_for_llm = None  # additional system message for LLM if needed
     
     print(f"Executing load_vitality_data tool. Attempting to read: {vitality_data_path}")
     
@@ -276,6 +284,7 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
             # Map important metrics to basic_info section of the user profile
             height = health_checks.get("height")
             weight = health_checks.get("weight")
+            last_check_date_str = health_checks.get("last_vitality_health_check")
             
             if height is not None:
                 if "basic_info" not in profile_data:
@@ -292,6 +301,18 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
                 if "basic_info" not in profile_data:
                     profile_data["basic_info"] = {}
                 profile_data["basic_info"]["bmi_kg_m2"] = calculate_bmi(height, weight)
+
+             # Check if weight/height data is stale
+            if last_check_date_str and (weight is not None or height is not None):
+                try:
+                    # Assuming date format is YYYY-MM-DD
+                    last_check_date = datetime.strptime(last_check_date_str, "%Y-%m-%d")
+                    six_months_ago = datetime.now() - timedelta(days=6*30) # Approximate 6 months
+                    if last_check_date < six_months_ago:
+                        system_message_for_llm = "Your weight data from Vitality is more than 6 months out of date. Please tell the user about this and ask for their latest weight."
+                        print("Vitality weight/height data is more than 6 months old.")
+                except ValueError:
+                    print(f"Could not parse last_vitality_health_check date: {last_check_date_str}")
         
         # 6. Check if we have all required fields to calculate nutrition targets
         profile_data = check_goal_calculation_readiness(profile_data)
@@ -302,7 +323,10 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
         print(f"Successfully updated {user_profile_path} with data from {vitality_data_path}")
         
         # 8. Return the full profile data as a JSON string for LLM use
-        return json.dumps(profile_data, indent=2)
+        profile_data_for_llm = copy.deepcopy(profile_data)
+        if system_message_for_llm: # Only add if it was set
+            profile_data_for_llm['system_message_for_llm'] = system_message_for_llm
+        return json.dumps(profile_data_for_llm, indent=2)
         
     except Exception as e:
         error_msg = f"Error processing file {vitality_data_path} or updating profile {user_profile_path}: {e}"

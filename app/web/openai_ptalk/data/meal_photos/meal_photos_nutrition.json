@@ -1,8 +1,8 @@
 [
   {
     "id": "Breakfast",
-    "description": "Avocado Toast with Egg",
-    "image_url": "/static/images/predefined/avocado_toast.jpg",
+    "description": "Chicken congee with youtiao and pickled greens",
+    "image_url": "/static/images/PNG_2025_06_09_0801.png",
     "nutrition": {
       "kilojoules": 1526,
       "protein_grams": 17,

@@ -1,20 +1,25 @@
 import json
 import pathlib
-from typing import Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import copy
+import asyncio
+import logging
+from .util import load_json_async, save_json_async, get_nested_value
+
+logger = logging.getLogger(__name__)
 
 # File paths
 USER_PROFILE_FILENAME = "user_profile.json"
 VITALITY_DATA_FILENAME = "vitality_data.json"
 HEALTHY_SWAP_FILENAME = "healthy_swap.json"
+MEAL_PHOTOS_NUTRITION_FILENAME  = "meal_photos_nutrition.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool Functions - LLM definition + function implementation
 # ─────────────────────────────────────────────────────────────────────────────
 
 ###### Helper function ######
-def calculate_bmi(height_cm: float, weight_kg: float) -> float:
+def calculate_bmi(height_cm: float, weight_kg: float) -> float | None:
     """
     Calculate BMI using the formula: weight (kg) / (height (m))^2
     
@@ -78,7 +83,10 @@ def check_goal_calculation_readiness(profile_data: dict) -> dict:
     
     return profile_data
 
+################################################
 ###### Profile update tool ######
+################################################
+
 PROFILE_TOOL_DEFINITION = {
     "type": "function",
     "name": "update_user_profile",
@@ -139,9 +147,7 @@ async def update_profile_json(user_data_dir, fields_to_update: dict):
     profile_data = {}
     try:
         # Load existing profile if it exists
-        if user_profile_path.exists():
-            with open(user_profile_path, 'r') as f:
-                profile_data = json.load(f)
+        profile_data = await load_json_async(user_profile_path, default_return_type=dict)
         
         # Process each field using the mapping
         for field, value in fields_to_update.items():
@@ -178,8 +184,7 @@ async def update_profile_json(user_data_dir, fields_to_update: dict):
         profile_data = check_goal_calculation_readiness(profile_data)
 
         # Write back to the file
-        with open(user_profile_path, 'w') as f:
-            json.dump(profile_data, f, indent=2)
+        await save_json_async(user_profile_path, profile_data)
         print(f"Updated profile with fields: {', '.join(fields_to_update.keys())}")
         
     except Exception as e:
@@ -188,8 +193,10 @@ async def update_profile_json(user_data_dir, fields_to_update: dict):
     # Return the updated profile as a JSON string
     return json.dumps(profile_data)
         
-        
+################################################        
 ###### Load External Health Data ######
+################################################
+
 LOAD_VITALITY_DATA_TOOL_DEFINITION = { # Explicitly type hint
     "type": "function",
     "name": "load_vitality_data",
@@ -221,18 +228,13 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
     
     try:
         # 1. Read Vitality data
-        with open(vitality_data_path, 'r') as f:
-            vitality_data = json.load(f)
-            print(f"Successfully loaded data from {vitality_data_path}")
+        vitality_data = await load_json_async(vitality_data_path, default_return_type=dict)
         
         # 2. Load existing user profile
-        profile_data = {}
-        if user_profile_path.exists():
-            try:
-                with open(user_profile_path, 'r') as f:
-                    profile_data = json.load(f)
-            except Exception as e:
-                print(f"Error reading existing profile {user_profile_path}: {e}. Starting fresh.")
+        profile_data = await load_json_async(user_profile_path, default_return_type=dict)
+        if not profile_data:
+            logger.warning(f"User profile {user_profile_path} not found or empty. Starting fresh.")
+            profile_data = {}
         
         # 3. Extract and map basic information
         basic_info = vitality_data.get("basic", {})
@@ -318,9 +320,8 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
         profile_data = check_goal_calculation_readiness(profile_data)
         
         # 7. Write updated profile back
-        with open(user_profile_path, 'w') as f:
-            json.dump(profile_data, f, indent=2)
-        print(f"Successfully updated {user_profile_path} with data from {vitality_data_path}")
+        await save_json_async(user_profile_path, profile_data)
+        logger.info(f"Successfully updated {user_profile_path} with data from {vitality_data_path}") # Changed print to logger
         
         # 8. Return the full profile data as a JSON string for LLM use
         profile_data_for_llm = copy.deepcopy(profile_data)
@@ -332,8 +333,10 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
         error_msg = f"Error processing file {vitality_data_path} or updating profile {user_profile_path}: {e}"
         print(error_msg)
 
-    
+################################################    
 ###### Load Healthy Swap Data ######
+################################################
+
 LOAD_HEALTHY_SWAP_TOOL_DEFINITION = {
     "type": "function",
     "name": "load_healthy_swap",
@@ -364,45 +367,36 @@ async def load_healthy_swap(user_data_dir: pathlib.Path) -> str:
     try:
         # Load from dedicated healthy_swap.json file
         if healthy_swap_path.exists():
-            with open(healthy_swap_path, 'r') as f:
-                healthy_swaps_data = json.load(f)
-                print(f"Successfully loaded healthy swaps data from {healthy_swap_path}")
+           # load the healthy swap data
+            healthy_swaps_data = await load_json_async(healthy_swap_path, default_return_type=dict)
                 
             # Update user profile with this data
-            if user_profile_path.exists():
-                try:
-                    with open(user_profile_path, 'r') as f:
-                        profile_data = json.load(f)
-                    
-                    # Update the healthy_swaps section
-                    profile_data["healthy_swaps"] = healthy_swaps_data
-                    
-                    # Write updated profile back
-                    with open(user_profile_path, 'w') as f:
-                        json.dump(profile_data, f, indent=2)
-                    print(f"Updated user profile with healthy swaps data")
-                except Exception as e:
-                    print(f"Error updating user profile: {e}")
+            profile_data = await load_json_async(user_profile_path, default_return_type=dict)
+            profile_data["healthy_swaps"] = healthy_swaps_data
+            await save_json_async(user_profile_path, profile_data) # Write updated profile back
+            logger.info(f"Updated user profile with healthy swaps data") # Changed print to logger
+
         else:
-            print(f"Dedicated healthy_swap.json not found")
-            healthy_swaps_data = {
+            logger.info(f"Dedicated healthy_swap.json not found or empty at {healthy_swap_path}") # Changed print to logger
+            healthy_swaps_data = { # Ensure healthy_swaps_data is a dict for the return
                 "NBA": None,
                 "date_recommended": None,
                 "recommended_swaps": None,
                 "notes": None
             }
-            
-        # Return the healthy swaps data as a JSON string
+
+         # Return the healthy swaps data as a JSON string
         return json.dumps(healthy_swaps_data, indent=2)
-        
+
     except Exception as e:
-        error_msg = f"Error loading healthy swaps data: {e}"
-        print(error_msg)
-        return json.dumps({"status": "error", "message": error_msg})
-
-
-
+            error_msg = f"Error loading healthy swaps data: {e}"
+            print(error_msg)
+            return json.dumps({"status": "error", "message": error_msg})
+       
+################################################
 ###### Calculate Nutrition Targets ######
+################################################
+
 CALCULATE_TARGETS_TOOL_DEFINITION = {
     "type": "function",
     "name": "calculate_daily_nutrition_targets",
@@ -436,11 +430,9 @@ async def calculate_daily_nutrition_targets(user_data_dir: pathlib.Path) -> str:
     
     try:
         # 1. Load user profile
-        if not user_profile_path.exists():
-            return json.dumps({"error": "User profile not found"})
-            
-        with open(user_profile_path, 'r') as f:
-            profile_data = json.load(f)
+        profile_data = await load_json_async(user_profile_path, default_return_type=dict)
+        if not profile_data:
+            return json.dumps({"error": "User profile not found or empty"})
         
         # 2. Extract required fields from nested structure
         weight_kg = profile_data.get("basic_info", {}).get("weight_kg")
@@ -537,8 +529,7 @@ async def calculate_daily_nutrition_targets(user_data_dir: pathlib.Path) -> str:
         profile_data["goals"]["goal_set"] = True
         
         # 12. Write updated profile back to file
-        with open(user_profile_path, 'w') as f:
-            json.dump(profile_data, f, indent=2)
+        await save_json_async(user_profile_path, profile_data)
         
         # 13. Return the nutrition targets as a JSON string
         return json.dumps(nutrition_targets, indent=2)
@@ -546,3 +537,172 @@ async def calculate_daily_nutrition_targets(user_data_dir: pathlib.Path) -> str:
     except Exception as e:
         error_msg = f"Error calculating nutrition targets: {str(e)}"
         print(error_msg)
+
+
+################################################
+# Meal_logger_tool - System triggered
+################################################
+NUTRITION_LOGGER_TOOL_DEFINITION = {
+    "type": "function",
+    "name": "nutrition_logger_tool",
+    "description": "An internal tool that logs nutritional contents of user uploaded meal photos and provides a summary. This tool will be triggered on the client side. do not use it directly",
+    "parameters": { 
+        "type": "object",
+        "properties": {}, # No parameters needed, reads profile internally
+        "required": []
+    }
+}
+
+async def _load_json_async(file_path: pathlib.Path) -> dict | list:
+    """Helper to asynchronously load a JSON file."""
+    if not await asyncio.to_thread(file_path.exists):
+        print(f"File not found: {file_path}")
+        return {} if file_path.name == USER_PROFILE_FILENAME else [] # Return list for meal photos
+    try:
+        content = await asyncio.to_thread(file_path.read_text)
+        return json.loads(content)
+    except Exception as e:
+        print(f"Error reading or parsing JSON file {file_path}: {e}")
+        return {} if file_path.name == USER_PROFILE_FILENAME else []
+
+
+async def _save_json_async(file_path: pathlib.Path, data: dict):
+    """Helper to asynchronously save a JSON file."""
+    try:
+        await asyncio.to_thread(file_path.write_text, json.dumps(data, indent=2))
+    except Exception as e:
+        print(f"Error writing JSON file {file_path}: {e}")
+
+
+async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_filenames: list[str]) -> dict:
+    """
+    Processes meal photo filenames, updates user profile with nutrition info,
+    and returns a summary for AI and the updated profile.
+    """
+    logger.info(f"Tool: log_meal_photos_from_filenames called with {photo_filenames}") # Changed print to logger
+    await asyncio.sleep(2) # Simulate processing delay
+
+    profile_path = user_data_dir / USER_PROFILE_FILENAME
+    meal_photos_path = pathlib.Path(__file__).parent / "data" / "meal_photos" / MEAL_PHOTOS_NUTRITION_FILENAME
+
+    profile_data = await load_json_async(profile_path, default_return_type=dict)
+    all_meal_photo_data = await load_json_async(meal_photos_path, default_return_type=list)
+
+    if not isinstance(profile_data, dict) or not isinstance(all_meal_photo_data, list):
+        return {
+            "summary_for_ai": "Error: Could not load necessary data files.",
+            "updated_full_profile": profile_data if isinstance(profile_data, dict) else {}
+        }
+
+    logged_meals_details = []
+    total_consumed_today = {
+        "kilojoules": 0, "protein_grams": 0, "fat_grams": 0,
+        "carbohydrate_grams": 0, "fiber_grams": 0
+    }
+
+    for filename_to_match in photo_filenames:
+        matched_meal = None
+        for meal_entry in all_meal_photo_data:
+            if meal_entry.get("image_url") and filename_to_match in meal_entry["image_url"]:
+                matched_meal = meal_entry
+                break
+        
+        if matched_meal:
+            logged_meals_details.append(matched_meal)
+            nutr = matched_meal.get("nutrition", {})
+            total_consumed_today["kilojoules"] += nutr.get("kilojoules", 0)
+            total_consumed_today["protein_grams"] += nutr.get("protein_grams", 0)
+            total_consumed_today["fat_grams"] += nutr.get("fat_grams", 0)
+            total_consumed_today["carbohydrate_grams"] += nutr.get("carbohydrate_grams", 0)
+            total_consumed_today["fiber_grams"] += nutr.get("fiber_grams", 0)
+
+    # Initialize/Update daily_nutrition_log
+    if "daily_nutrition_log" not in profile_data or not isinstance(profile_data["daily_nutrition_log"], list):
+        profile_data["daily_nutrition_log"] = []
+    
+    current_datetime_iso = datetime.now().isoformat()
+    for meal_detail in logged_meals_details:
+        profile_data["daily_nutrition_log"].append({
+            "timestamp": current_datetime_iso,
+            "source": "photo_log",
+            "description": meal_detail.get("description"),
+            "image_url": meal_detail.get("image_url"),
+            "nutrition": meal_detail.get("nutrition"),
+            "items": meal_detail.get("items")
+        })
+
+    # Initialize/Update daily_tracking_summary
+    today_str = date.today().isoformat()
+    nutritional_goals = profile_data.get("goals", {}).get("nutritional_goals", {})
+
+    if "daily_tracking_summary" not in profile_data or \
+        not isinstance(profile_data["daily_tracking_summary"], dict) or \
+        profile_data["daily_tracking_summary"].get("date") != today_str:
+        
+        profile_data["daily_tracking_summary"] = {
+            "date": today_str,
+            "energy_quota": {
+                "total_kj": nutritional_goals.get("daily_kilojoules"),
+                "baseline_kj": nutritional_goals.get("daily_kilojoules"), # Assuming baseline is the total target for now
+                "exercise_kj": 0 # Placeholder
+            },
+            "tracking_details": {
+                "energy":    { "consumed_kj": 0, "target_kj": nutritional_goals.get("daily_kilojoules"), "unit": "kJ", "percentage": 0 },
+                "protein":   { "consumed_g": 0, "target_g": nutritional_goals.get("protein_grams"), "unit": "g", "percentage": 0 },
+                "fat":       { "consumed_g": 0, "target_g": nutritional_goals.get("fat_grams"), "unit": "g", "percentage": 0 },
+                "carbs":     { "consumed_g": 0, "target_g": nutritional_goals.get("carbohydrate_grams"), "unit": "g", "percentage": 0 },
+                "fiber":     { "consumed_g": 0, "target_g": nutritional_goals.get("fiber_grams"), "unit": "g", "percentage": 0 }
+            }
+        }
+    
+    # This is important if goals were recalculated but summary was for the same day
+    summary_energy_quota = profile_data["daily_tracking_summary"]["energy_quota"]
+    summary_tracking_details = profile_data["daily_tracking_summary"]["tracking_details"]
+
+    summary_energy_quota["total_kj"] = nutritional_goals.get("daily_kilojoules")
+    summary_energy_quota["baseline_kj"] = nutritional_goals.get("daily_kilojoules") # Re-affirm baseline assumption
+
+    summary_tracking_details["energy"]["target_kj"] = nutritional_goals.get("daily_kilojoules")
+    summary_tracking_details["protein"]["target_g"] = nutritional_goals.get("protein_grams")
+    summary_tracking_details["fat"]["target_g"] = nutritional_goals.get("fat_grams")
+    summary_tracking_details["carbs"]["target_g"] = nutritional_goals.get("carbohydrate_grams")
+    summary_tracking_details["fiber"]["target_g"] = nutritional_goals.get("fiber_grams")
+
+    # Add newly consumed amounts
+    summary_tracking_details["energy"]["consumed_kj"] += total_consumed_today["kilojoules"]
+    summary_tracking_details["protein"]["consumed_g"] += total_consumed_today["protein_grams"]
+    summary_tracking_details["fat"]["consumed_g"] += total_consumed_today["fat_grams"]
+    summary_tracking_details["carbs"]["consumed_g"] += total_consumed_today["carbohydrate_grams"]
+    summary_tracking_details["fiber"]["consumed_g"] += total_consumed_today["fiber_grams"]
+
+    # Recalculate percentages
+    for nutrient_key, details_key, consumed_key, target_key in [
+        ("energy", "energy", "consumed_kj", "target_kj"),
+        ("protein", "protein", "consumed_g", "target_g"),
+        ("fat", "fat", "consumed_g", "target_g"),
+        ("carbs", "carbs", "consumed_g", "target_g"),
+        ("fiber", "fiber", "consumed_g", "target_g")
+    ]:
+        consumed = summary_tracking_details[details_key][consumed_key]
+        target = summary_tracking_details[details_key][target_key]
+        summary_tracking_details[details_key]["percentage"] = round((consumed / (target or 1)) * 100) if target is not None else (100 if consumed > 0 else 0)
+
+
+    await save_json_async(profile_path, profile_data)
+
+    summary_for_ai = f"""
+    Logged {len(logged_meals_details)} meal(s) from photos.
+    The user's daily nutrition tracking summary has been updated and displayed to them.
+    Key figures from today's summary:
+    - Energy: {summary_tracking_details['energy']['consumed_kj']}/{summary_tracking_details['energy']['target_kj'] or 'N/A'} kJ
+    - Protein: {summary_tracking_details['protein']['consumed_g']}/{summary_tracking_details['protein']['target_g'] or 'N/A'} g
+    Please provide some very short, witty, and encouraging feedback to the user about their meal choices and today's summary so far.
+    """
+    if not logged_meals_details:
+        summary_for_ai = "Meal nutrition estimation failed or no matching meals found for the provided photos."
+        
+    logger.info(f"Tool log_meal_photos_from_filenames summary for AI: {summary_for_ai}")
+    return {
+        "summary_for_ai": summary_for_ai,
+        "updated_full_profile": copy.deepcopy(profile_data)
+    }

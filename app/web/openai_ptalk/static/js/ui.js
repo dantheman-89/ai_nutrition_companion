@@ -2,16 +2,33 @@
 
 // Cache DOM elements
 const elements = {
+  // Startup screen elements
   startupScreen: document.getElementById('startup-screen'),
   startupCircle: document.getElementById('startup-circle'),
   startupText: document.getElementById('startup-text'),
+  // Main app container
   appContainer: document.getElementById('app-container'),
+  // Left Section - Messaging & input control elements
+  messagesSection: document.getElementById("messages"), // chat message section
   connectBtn: document.getElementById("connect"), // connect button at the bottom
   inputEl: document.getElementById("input"), // text input bar at the bottom
   sendBtn: document.getElementById("send"), // text send buttons at the bottom
   recordBtn: document.getElementById("record"), // record button at the bottom
-  messagesDiv: document.getElementById("messages"), // chat message section
-  profileSection: document.getElementById('profile-section'), // profile section
+  // Right Section - Info panel elements
+  infoPanelsSection: document.getElementById('info-panels-section'), 
+  // Profile Panel elements
+  profileContentArea: document.getElementById('profile-content-area'),
+  // Nutrition Tracking Panel Elements
+  nutritionTrackingContentArea: document.getElementById('nutrition-tracking-content-area'), // Content area for 2nd panel
+  energyQuotaCardContainer: document.getElementById('energy-quota-card-container'),
+  nutritionProgressCardContainer: document.getElementById('nutrition-progress-card-container'),
+  uploadMealCard: document.getElementById('upload-meal-card'),
+  uploadPhotoTriggerBtn: document.getElementById('upload-photo-trigger-btn'),
+  mealPhotoInput: document.getElementById('mealPhotoInput'),
+  selectedFilesCount: document.getElementById('selected-files-count'),
+  estimatePhotosBtn: document.getElementById('estimate-photos-btn'),
+  processedMealPhotosContainer: document.getElementById('processed-meal-photos-container'),
+  // debugging elements
   debugEl: document.getElementById("debug") // for debugging
 };
 
@@ -32,7 +49,9 @@ function initializeUI() {
   elements.appContainer.classList.add('hidden');    // Ensure app container is hidden
   elements.appContainer.classList.remove('visible');
   updateConnectionUI("DISCONNECTED");
-  updateProfileDisplay({}); // Initialize profile section with placeholder
+  updateProfileDisplay({ data: {} });
+  updateNutritionTrackingDisplay({});
+  // showChatScreen(); // Debug code, remove this line in production
   
   // Add window resize handler to adjust message container height
   window.addEventListener('resize', adjustMessageContainerHeight);
@@ -134,90 +153,309 @@ function createMessageBubble(sender, initialText) {
   } else { // AI
     bubbleDiv.className = "message-bubble ai-message";
   }
-  elements.messagesDiv.appendChild(bubbleDiv);
+  elements.messagesSection.appendChild(bubbleDiv);
   scrollToBottom();
   return bubbleDiv;
 }
 
 function scrollToBottom() {
-  elements.messagesDiv.scrollTop = elements.messagesDiv.scrollHeight;
+  elements.messagesSection.scrollTop = elements.messagesSection.scrollHeight;
 }
 
 // ---------------------------------------------------------
-// User profile UI elements 
+// Right handside info panel elements 
 // ---------------------------------------------------------
-// Function to update the profile display section
-function updateProfileDisplay(msg) {
-  if (!elements.profileSection) {
-    debug("Profile section element not found.");
-    return;
-  }
+function initializeCollapsiblePanels() {
+  const panelHeaders = document.querySelectorAll('#info-panels-section .collapsible-panel .panel-header');
+  panelHeaders.forEach(header => {
+    header.addEventListener('click', () => {
+      const panel = header.closest('.collapsible-panel');
+      const content = panel.querySelector('.panel-content');
+      
+      // Close all other open panels in the same section
+      document.querySelectorAll('#info-panels-section .collapsible-panel .panel-content.open').forEach(openContent => {
+        if (openContent !== content) {
+          openContent.classList.remove('open');
+          const otherHeader = openContent.previousElementSibling;
+          if (otherHeader) {
+            otherHeader.classList.remove('active');
+          }
+        }
+      });
 
-  // Clear previous content
-  elements.profileSection.innerHTML = ''; 
+      // Toggle current panel
+      const isOpen = content.classList.toggle('open');
+      header.classList.toggle('active', isOpen);
+    });
+  });
 
-   // Extract the actual profile data from the message payload
-  const profileData = msg && msg.data ? msg.data : {};
-
-  // temp code for debugging
-  // console.log("PROFILE_DATA received by updateProfileDisplay:", JSON.stringify(profileData, null, 2)); // <<< ADD THIS FOR DEBUGGING
-
-  if (!profileData || Object.keys(profileData).length === 0) {
-    elements.profileSection.innerHTML = `
-      <div class="profile-placeholder p-4">
-        <h3 class="text-xl font-semibold mb-2" style="color: var(--pingan-orange);">User Profile</h3>
-        <p style="color: rgba(255, 255, 255, 0.7);">Profile information will be displayed here once available.</p>
-      </div>`;
-    debug("Profile data is empty, showing placeholder.");
-    return;
-  }
-
-  debug("Updating profile display with new data.");
-  const profileContainer = document.createElement('div');
-  profileContainer.className = 'custom-scrollbar p-4 space-y-3 overflow-y-auto h-full'; // Added padding, spacing, and scroll
-
-  for (const sectionTitle in profileData) {
-    const sectionData = profileData[sectionTitle];
-    if (typeof sectionData === 'object' && sectionData !== null && Object.keys(sectionData).length > 0) {
-      const sectionDiv = document.createElement('div');
-      sectionDiv.className = 'profile-data-section shadow rounded-md p-3'; 
-      sectionDiv.style.backgroundColor = 'var(--ai-message-bg)';
-
-      const titleEl = document.createElement('h4');
-      titleEl.className = 'text-md font-semibold mb-2 border-b pb-1'; 
-      titleEl.style.color = 'var(--text-color)'; // White text for title
-      titleEl.style.borderColor = 'rgba(255, 255, 255, 0.2)'; // Lighter border for dark bg
-      titleEl.textContent = sectionTitle;
-      sectionDiv.appendChild(titleEl);
-
-      const ul = document.createElement('ul');
-      ul.className = 'space-y-1 text-base';
-
-      for (const key in sectionData) {
-        const li = document.createElement('li');
-        li.className = 'flex justify-between items-center'; 
-
-        const keySpan = document.createElement('span');
-        keySpan.className = 'font-medium text-slate-600 mr-2'; // Added margin for spacing
-        keySpan.style.color = 'var(--profile-card-key-text-color)';
-        keySpan.textContent = `${key}:`;
-        
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'text-slate-800 text-right break-all'; // Allow long values to break
-        valueSpan.style.color = 'var(--profile-card-text-color)'; 
-        valueSpan.textContent = sectionData[key] !== null && sectionData[key] !== undefined ? String(sectionData[key]) : 'N/A';
-        
-        li.appendChild(keySpan);
-        li.appendChild(valueSpan);
-        ul.appendChild(li);
+  // Optional: Ensure the first panel (User Profile) is open by default and styled correctly
+  const firstPanel = document.querySelector('#info-panels-section .collapsible-panel');
+  if (firstPanel) {
+      const firstHeader = firstPanel.querySelector('.panel-header');
+      const firstContent = firstPanel.querySelector('.panel-content');
+      if (firstHeader && firstContent && firstContent.classList.contains('open')) {
+          firstHeader.classList.add('active');
       }
-      sectionDiv.appendChild(ul);
-      profileContainer.appendChild(sectionDiv);
-    }
   }
-  elements.profileSection.appendChild(profileContainer);
 }
 
+
+// --- Update "User Profile" Panel (First Panel) ---
+function updateProfileDisplay(msg) {
+  const profileDataForDisplay = msg && msg.data ? msg.data : {};
+
+  if (!elements.profileContentArea) {
+    debug("Profile content area element not found for User Profile panel.");
+    return;
+  }
+
+  if (!profileDataForDisplay || Object.keys(profileDataForDisplay).length === 0) {
+    // Inject only the placeholder paragraph.
+    // The parent .panel-content.open provides the "card-like" padding.
+    elements.profileContentArea.innerHTML = `
+        <p class="placeholder-text">Profile information will be displayed here once available.</p>
+      `;
+    debug("Profile data for display is empty, showing placeholder in User Profile panel.");
+  } else {
+    debug("Updating User Profile panel display with new data.");
+    let profileHtml = '';
+    for (const sectionTitle in profileDataForDisplay) {
+      if (Object.hasOwnProperty.call(profileDataForDisplay, sectionTitle)) {
+        const sectionData = profileDataForDisplay[sectionTitle];
+        if (typeof sectionData === 'object' && sectionData !== null && Object.keys(sectionData).length > 0) {
+          profileHtml += `<div class="profile-data-section"><h4>${sectionTitle}</h4><ul>`;
+          for (const key in sectionData) {
+            if (Object.hasOwnProperty.call(sectionData, key)) {
+              profileHtml += `<li><span class="profile-key">${key}:</span> <span class="profile-value">${sectionData[key] !== null && sectionData[key] !== undefined ? String(sectionData[key]) : 'N/A'}</span></li>`;
+            }
+          }
+          profileHtml += `</ul></div>`;
+        }
+      }
+    }
+    // When profile data is available, it uses .profile-data-section which has its own card styling.
+    elements.profileContentArea.innerHTML = profileHtml || '<p class="placeholder-text">No details to display.</p>';
+  }
+}
+
+// --- Central Function to Update "Nutrition Tracking" Panel (Second Panel) ---
+function updateNutritionTrackingDisplay(msg) {
+  debug("Updating Nutrition Tracking panel with data");
+
+  // load message data
+    const trackingData = msg && msg.data ? msg.data : {};
+
+  // --- 1. Update "Daily Energy Quota" Card ---
+  if (elements.energyQuotaCardContainer) {
+    elements.energyQuotaCardContainer.innerHTML = ''; // Clear previous content
+    const quotaTitle = document.createElement('h4');
+    quotaTitle.className = 'card-title';
+    quotaTitle.textContent = 'Daily Energy Quota';
+    elements.energyQuotaCardContainer.appendChild(quotaTitle);
+
+    const energyQuotaData = trackingData["Daily Energy Quota"] || {};
+
+    if (Object.keys(energyQuotaData).length > 0) {
+        for (const key in energyQuotaData) {
+            if (Object.hasOwnProperty.call(energyQuotaData, key)) {
+                const p = document.createElement('p');
+                // Add 'text-xs' class for "Baseline" and "Exercise" for consistency if desired
+                if (key === "Baseline" || key === "Exercise") {
+                    p.className = 'text-xs';
+                }
+                p.innerHTML = `${key}: <span>${energyQuotaData[key]}</span>`; // Value already formatted with unit
+                elements.energyQuotaCardContainer.appendChild(p);
+            }
+        }
+    } else {
+      elements.energyQuotaCardContainer.appendChild(document.createTextNode("No energy quota data available."));
+    }
+  } else {
+    debug("Energy quota card container not found.");
+  }
+
+  // --- 2. Update "Daily Tracking" Card ---
+  if (elements.nutritionProgressCardContainer) {
+    elements.nutritionProgressCardContainer.innerHTML = ''; // Clear previous content
+    const progressTitle = document.createElement('h4');
+    progressTitle.className = 'card-title';
+    progressTitle.textContent = 'Daily Tracking';
+    elements.nutritionProgressCardContainer.appendChild(progressTitle);
+
+    const dailyTrackingData = trackingData["Daily Tracking"] || {};
+
+    if (dailyTrackingData["Energy"]) {
+      const energyData = dailyTrackingData["Energy"];
+      const energyP = document.createElement('p');
+      energyP.innerHTML = `Energy: <span>${energyData.consumed || '0'}</span> / <span>${energyData.target || '0'}</span> ${energyData.unit || 'kJ'}`;
+      elements.nutritionProgressCardContainer.appendChild(energyP);
+
+      const progressBarContainer = document.createElement('div');
+      progressBarContainer.className = 'progress-bar-container my-1'; // Ensure 'my-1' or similar margin utility if from Tailwind, or add margin in CSS
+      const progressBar = document.createElement('div');
+      progressBar.className = 'progress-bar';
+      
+      const consumed = parseFloat(String(energyData.consumed).replace(/,/g, '')) || 0; // Ensure parsing after removing commas
+      const target = parseFloat(String(energyData.target).replace(/,/g, '')) || 0; // Ensure parsing after removing commas
+      let percentage = 0;
+      if (target > 0) {
+        percentage = (consumed / target) * 100;
+      } else if (consumed > 0) { // Consumed but no target, consider 100% or a specific state
+        percentage = 100; 
+      }
+
+      if (consumed > target && target > 0) { // Over quota
+        progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = 'var(--over-quota-red)';
+        // You could add text inside the bar if it's wide enough, or a tooltip
+        // progressBar.textContent = `Over by ${Math.round(consumed - target)}${energyData.unit || 'kJ'}`;
+      } else { // Under or at quota
+        progressBar.style.width = `${Math.min(percentage, 100)}%`;
+        progressBar.style.backgroundColor = 'var(--record-green)';
+      }
+      progressBarContainer.appendChild(progressBar);
+      elements.nutritionProgressCardContainer.appendChild(progressBarContainer);
+    }
+
+    const macrosOrder = ["Protein", "Fat", "Carbs", "Fiber"]; // Define order
+    const macrosContainer = document.createElement('div');
+    macrosContainer.className = 'macros-display-container'; // New class for styling
+    let hasMacros = false;
+    macrosOrder.forEach(macroName => {
+        if (dailyTrackingData[macroName]) {
+            hasMacros = true;
+            const macroData = dailyTrackingData[macroName];
+            const macroSpan = document.createElement('span');
+            macroSpan.className = 'macro-item'; // New class for styling individual items
+            
+            let macroText = `${macroName}: `;
+            if (macroData.consumed_g !== undefined && macroData.target_g !== undefined) {
+                macroText += `${macroData.consumed_g || '0'}/${macroData.target_g || '0'}g`;
+                if (macroData.percentage !== undefined) {
+                    macroText += ` (${macroData.percentage || 0}%)`;
+                }
+            } else if (macroData.percentage !== undefined) { // Fallback if only percentage is available
+                macroText += `${macroData.percentage || 0}%`;
+            } else {
+                macroText += 'N/A'; // Fallback if no data
+            }
+            macroSpan.textContent = macroText;
+            macrosContainer.appendChild(macroSpan);
+        }
+    });
+
+    if (hasMacros) {
+        elements.nutritionProgressCardContainer.appendChild(macrosContainer);
+    }
+
+     if (Object.keys(dailyTrackingData).length === 0 && !dailyTrackingData["Energy"]) { // Check if truly empty
+      const noDataP = document.createElement('p');
+      noDataP.textContent = "No daily tracking data available.";
+      elements.nutritionProgressCardContainer.appendChild(noDataP);
+    }
+
+  } else {
+    debug("Nutrition progress card container element not found.");
+  }
+
+  // --- 3. Update "Processed Meal Photos" ---
+  // This part assumes trackingData might also contain "Logged Meals" or similar
+  // It reuses the existing displayProcessedMealResults logic but calls it with the relevant part of trackingData.
+  if (elements.processedMealPhotosContainer) {
+    const loggedMealsData = trackingData["Logged Meals"] || []; // Expect an array
+    // We can call the existing displayProcessedMealResults directly if its input matches
+    // For this refactor, let's assume displayProcessedMealResults expects an object like { processed_photos: [...] }
+    displayProcessedMealResults({ processed_photos: loggedMealsData });
+  } else {
+    debug("Processed meal photos container not found.");
+  }
+}
+
+// --- Meal Photo Upload UI Logic (setupPhotoUploadLogic) ---
+// This function remains largely the same as it sets up event listeners for existing HTML elements
+function setupPhotoUploadLogic() {
+  if (elements.uploadPhotoTriggerBtn && elements.mealPhotoInput && elements.estimatePhotosBtn && elements.selectedFilesCount) {
+    elements.uploadPhotoTriggerBtn.addEventListener('click', () => elements.mealPhotoInput.click());
+    elements.mealPhotoInput.addEventListener('change', (event) => {
+      if (event.target.files && event.target.files.length > 0) {
+        elements.selectedFilesCount.textContent = `${event.target.files.length} photo(s) selected`;
+        elements.estimatePhotosBtn.classList.remove('hidden');
+      } else {
+        elements.selectedFilesCount.textContent = 'No photos selected';
+        elements.estimatePhotosBtn.classList.add('hidden');
+      }
+    });
+  }
+}
+
+// --- Display Processed Meal Photos (Can be called by updateNutritionTrackingDisplay) ---
+function displayProcessedMealResults(data) { // data is expected to be { processed_photos: [...] }
+  if (!elements.processedMealPhotosContainer) {
+    debug("Processed meal photos container not found.");
+    return;
+  }
+  elements.processedMealPhotosContainer.innerHTML = ''; 
+
+  const photos = data.processed_photos || [];
+
+  if (photos.length > 0) {
+    photos.forEach(meal => { 
+      const card = document.createElement('div');
+      card.className = 'processed-meal-card';
+      
+      let itemsHtml = '';
+      if (meal.items && typeof meal.items === 'object' && Object.keys(meal.items).length > 0) {
+        itemsHtml = Object.entries(meal.items).map(([itemName, itemNutrition]) => `
+          <div class="item-entry">
+            <span class="item-name">${itemName}</span>
+            <span class="item-kj">${itemNutrition.kilojoules !== undefined ? itemNutrition.kilojoules.toLocaleString() : '0'} kJ</span>
+          </div>
+        `).join('');
+      }
+      
+      const totalMealKj = meal.nutrition && meal.nutrition.kilojoules !== undefined ? meal.nutrition.kilojoules : 0;
+      const protein = meal.nutrition && meal.nutrition.protein_grams !== undefined ? meal.nutrition.protein_grams : 0;
+      const fat = meal.nutrition && meal.nutrition.fat_grams !== undefined ? meal.nutrition.fat_grams : 0;
+      const carbs = meal.nutrition && meal.nutrition.carbohydrate_grams !== undefined ? meal.nutrition.carbohydrate_grams : 0;
+      const fiber = meal.nutrition && meal.nutrition.fiber_grams !== undefined ? meal.nutrition.fiber_grams : 0;
+
+      // Build macros HTML for flex display
+      let macrosHtml = '';
+      if (meal.nutrition) { // Check if nutrition object exists
+        macrosHtml += `<div class="macro-item">Protein: <span>${protein}g</span></div>`;
+        macrosHtml += `<div class="macro-item">Fat: <span>${fat}g</span></div>`;
+        macrosHtml += `<div class="macro-item">Carbs: <span>${carbs}g</span></div>`;
+        macrosHtml += `<div class="macro-item">Fiber: <span>${fiber}g</span></div>`;
+      }
+
+
+      card.innerHTML = `
+        <h5 class="meal-title">${meal.description || 'Logged Meal'}</h5>
+        ${meal.image_url ? `<img src="${meal.image_url}" alt="${meal.description || 'Meal'}" class="meal-image">` : ''}
+        <div class="nutrition-summary">
+          <div></div> ${/* Placeholder for potential left-aligned content */''}
+          <div class="total-kj">${totalMealKj.toLocaleString()} kJ</div>
+        </div>
+        <div class="macros">
+          ${macrosHtml}
+        </div>
+        ${itemsHtml ? `<h6 class="items-list-title">Items:</h6><div class="items-container">${itemsHtml}</div>` : ''}
+      `;
+      elements.processedMealPhotosContainer.appendChild(card);  
+    });
+    
+  } else {
+    // No need to add a placeholder here if it's desired to show nothing when empty
+    // elements.processedMealPhotosContainer.innerHTML = '<p class="text-xs" style="color: var(--content-key-text-color);">No meal photo data to display.</p>';
+  }
+
+  // Re-enable the estimate photos button
+  if (elements.estimatePhotosBtn) {
+    elements.estimatePhotosBtn.disabled = false;
+    elements.estimatePhotosBtn.textContent = 'Estimate Nutrition';
+  };
+}
 // ---------------------------------------------------------
 // Debuging UI - Log debug messages if debugging is enabled
 // ---------------------------------------------------------
@@ -262,7 +500,17 @@ export {
   connectionState,
   adjustMessageContainerHeight,
   showChatScreen,
-  updateProfileDisplay
+  initializeCollapsiblePanels,
+  updateProfileDisplay,
+  updateNutritionTrackingDisplay,
+  displayProcessedMealResults,
+  setupPhotoUploadLogic
 };
 
-// Allow other modules to update these states
+// Add these lines for console debugging:
+// REMEMBER TO REMOVE THESE AFTER TESTING
+if (DEBUG) { // Optional: only expose if DEBUG is true
+    window.testUpdateProfile = updateProfileDisplay;
+    window.testUpdateNutritionTracking = updateNutritionTrackingDisplay;
+    window.uiElements = elements; // Expose elements for inspection too
+}

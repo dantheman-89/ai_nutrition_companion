@@ -1,12 +1,19 @@
 // WebSocket Module - Handles communication with the server
-import { debug, createMessageBubble, scrollToBottom, connectionState, updateConnectionUI, elements, updateProfileDisplay} from './ui.js';
+import {
+  debug, 
+  createMessageBubble, 
+  scrollToBottom, 
+  connectionState, 
+  updateConnectionUI, 
+  elements, 
+  updateProfileDisplay,
+  updateNutritionTrackingDisplay
+} from './ui.js';
 import { playAudioChunk, stopAudioCapture, } from './audio.js';
 
 // WebSocket state
 let ws;
 let wsConnected = false;
-let connectionTimeout = null;
-let userInitiatedDisconnect = false;
 
 // SpeechBubble state
 let userTranscriptFinalized = true;
@@ -92,6 +99,7 @@ function handleWebSocketMessage(e) {
       case "input_audio_transcript_done": handleTranscriptDone(data); break;
       case "input_audio_buffer_committed": handleInputBufferCommitted(data); break;
       case "profile_update":          updateProfileDisplay(data); break;
+      case "nutrition_tracking_update": updateNutritionTrackingDisplay(data); break;
       case "error":                   handleServerError(data); break;
       default:
         // Log other potentially useful events if needed, but less verbosely
@@ -280,7 +288,13 @@ function sendTextMessage(text) {
   debug(`Sending text message: ${text}`);
 
   // Send JSON over WebSocket
-  ws.send(JSON.stringify({ type: "user_message", text }));
+  const message = {
+    type: "user_text_message",
+    payload: {
+      text: text
+    }
+  };
+  ws.send(JSON.stringify(message));
   return true;
 }
 
@@ -294,7 +308,7 @@ function setLastAiElem(elem) {
 
 
 //-------------------------------------------------
-// Handle client WebSocket messages
+// Handle client UI Buttons and Events
 //-------------------------------------------------
 
 // Handle send button click
@@ -311,6 +325,35 @@ function handleSendButtonClick() {
   }
 }
 
+// send photo file names for nutrition estimation
+function sendMealPhotoForEstimation(fileNamesArray) {
+  if (!isConnected()) {
+    debug("Cannot send photo names: WebSocket not connected.");
+    // showSystemMessage("Cannot estimate photos: Not connected.", "error"); // If you have showSystemMessage
+    console.error("Cannot estimate photos: Not connected.");
+    if (elements.estimatePhotosBtn) { // Re-enable button if called when not connected
+        elements.estimatePhotosBtn.disabled = false;
+        elements.estimatePhotosBtn.textContent = 'Estimate Nutrition';
+    }
+    return false;
+  }
+  if (!fileNamesArray || fileNamesArray.length === 0) {
+    debug("Cannot send photo names: No file names provided.");
+    // The calling logic in main.js should handle UI if no files are selected
+    return false;
+  }
+
+  const message = {
+    type: "estimate_photos_nutrition", // Changed type
+    payload: {
+      filenames: fileNamesArray, 
+    },
+  };
+  ws.send(JSON.stringify(message));
+  debug("Sent photo names for estimation:", message);
+  return true; 
+}
+
 // Export public API
 export {
   wsConnected,
@@ -318,6 +361,7 @@ export {
   connect,
   disconnect,
   sendTextMessage,
+  sendMealPhotoForEstimation,
   isConnected,
   getWebSocket
 };

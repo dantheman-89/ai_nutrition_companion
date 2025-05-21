@@ -273,11 +273,17 @@ function sendAudioChunk(audioData) {
   }
 
   try {
-    // Convert Float32Array to Int16Array for more efficient transmission
-    const pcm16 = convertFloat32ToInt16(audioData);
+    const pcm16 = convertFloat32ToInt16(audioData); // Convert Float32Array to Int16Array
+    const audio_base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pcm16.buffer)));  // Convert ArrayBuffer to Base64 string
     
-    // Send binary data directly
-    WSClient.ws.send(pcm16.buffer);
+    // Send JSON message with base64 audio
+    const message = {
+      type: "user_audio_chunk",
+      payload: {
+        audio: audio_base64
+      }
+    };
+    WSClient.ws.send(JSON.stringify(message));
   } catch (err) {
     UI.debug(`Error sending audio: ${err.message}`);
     console.error("Error sending audio:", err);
@@ -370,9 +376,12 @@ function sendSpeechStartSignal() {
     }
     
     UI.debug("Sending speech_start signal to server");
-    WSClient.ws.send(JSON.stringify({
-      type: "speech_start"
-    }));
+    const message = {
+      type: "speech_start",
+      payload: {}
+    };
+    WSClient.ws.send(JSON.stringify(message));
+
     return true;
   } catch (err) {
     UI.debug(`Error sending speech_start: ${err.message}`);
@@ -389,9 +398,12 @@ function sendSpeechEndSignal() {
     }
     
     UI.debug("Sending speech_end signal to server");
-    WSClient.ws.send(JSON.stringify({
-      type: "speech_end"
-    }));
+    const message = {
+      type: "speech_end",
+      payload: {}
+    };
+    WSClient.ws.send(JSON.stringify(message));
+
     return true;
   } catch (err) {
     UI.debug(`Error sending speech_end: ${err.message}`);

@@ -1,26 +1,26 @@
 {
   "basic_info": {
     "preferred_name": "Dan",
-    "age_years": 36,
-    "sex": "Male",
-    "height_cm": 179,
-    "weight_kg": 73.5,
-    "bmi_kg_m2": 22.9
+    "age_years": null,
+    "sex": null,
+    "height_cm": null,
+    "weight_kg": null,
+    "bmi_kg_m2": null
   },
   "goals": {
     "weight_goals": {
-      "target_weight_kg": 68,
-      "goal_timeframe_weeks": 26
+      "target_weight_kg": null,
+      "goal_timeframe_weeks": null
     },
     "nutritional_goals": {
-      "daily_kilojoules": 7455,
-      "protein_grams": 118,
-      "fat_grams": 49,
-      "carbohydrate_grams": 217,
-      "fiber_grams": 25
+      "daily_kilojoules": null,
+      "protein_grams": null,
+      "fat_grams": null,
+      "carbohydrate_grams": null,
+      "fiber_grams": null
     },
-    "ready_to_calculate_goal": true,
-    "goal_set": true
+    "ready_to_calculate_goal": false,
+    "goal_set": false
   },
   "dietary_preferences": {
     "culture": null,
@@ -31,38 +31,21 @@
     "eating_habits": null
   },
   "vitality_information": {
-    "status": "Gold",
+    "status": null,
     "points": {
-      "current_year": 48500,
-      "goal_for_diamond": 50000,
-      "weekly_active_rewards_streak": 8
+      "current_year": null,
+      "goal_for_diamond": null,
+      "weekly_active_rewards_streak": null
     },
-    "recent_activities": [
-      {
-        "date": "2025-05-03",
-        "type": "Gym Visit",
-        "points": 150
-      },
-      {
-        "date": "2025-05-01",
-        "type": "HealthyFood Purchase",
-        "points": 50
-      },
-      {
-        "date": "2025-04-29",
-        "type": "Parkrun",
-        "points": 300
-      }
-    ],
+    "recent_activities": null,
     "health_checks": {
-      "last_vitality_health_check": "2024-11-15",
-      "weight": 73,
-      "height": 179,
-      "bmi": 22.8,
-      "blood_pressure": "Normal: 120/80",
-      "glucose": "Normal: 4.9 mmol/L",
-      "LDL_cholesterol": null,
-      "LDL cholesterol": "Normal: 2.8 mmol/L"
+      "last_vitality_health_check": null,
+      "weight": null,
+      "height": null,
+      "bmi": null,
+      "blood_pressure": null,
+      "glucose": null,
+      "LDL_cholesterol": null
     }
   },
   "healthy_swaps": {
@@ -70,5 +53,134 @@
     "date_recommended": null,
     "recommended_swaps": null,
     "notes": null
+  },
+  "daily_nutrition_log": [
+    {
+      "timestamp": "2025-05-21T09:46:17.465020",
+      "source": "photo_log",
+      "description": "Chicken congee with youtiao and pickled greens",
+      "image_url": "/static/images/PNG_2025_06_09_0801.png",
+      "nutrition": {
+        "kilojoules": 1526,
+        "protein_grams": 17,
+        "fat_grams": 23,
+        "carbohydrate_grams": 67,
+        "fiber_grams": 4
+      },
+      "items": {
+        "Chicken Congee": {
+          "kilojoules": 706,
+          "protein_grams": 10.0,
+          "fat_grams": 3.0,
+          "carbohydrate_grams": 25.0,
+          "fiber_grams": 1.0
+        },
+        "Youtiao": {
+          "kilojoules": 750,
+          "protein_grams": 6.0,
+          "fat_grams": 20.0,
+          "carbohydrate_grams": 40.0,
+          "fiber_grams": 2.0
+        },
+        "Pickled Mustard Greens": {
+          "kilojoules": 70,
+          "protein_grams": 1.0,
+          "fat_grams": 0.5,
+          "carbohydrate_grams": 2.0,
+          "fiber_grams": 1.0
+        }
+      }
+    },
+    {
+      "timestamp": "2025-05-21T09:46:17.465020",
+      "source": "photo_log",
+      "description": "Beef Pho",
+      "image_url": "/static/images/PNG_2025_06_09_1223.png",
+      "nutrition": {
+        "kilojoules": 1800,
+        "protein_grams": 40,
+        "fat_grams": 18,
+        "carbohydrate_grams": 15,
+        "fiber_grams": 6
+      },
+      "items": {
+        "Pho (beef with rice noodles and broth)": {
+          "kilojoules": 1700,
+          "protein_grams": 30.0,
+          "fat_grams": 13.5,
+          "carbohydrate_grams": 41.0,
+          "fiber_grams": 1.0
+        }
+      }
+    },
+    {
+      "timestamp": "2025-05-21T09:46:17.465020",
+      "source": "photo_log",
+      "description": "Blueberry Muffin and Tea",
+      "image_url": "/static/images/PNG_2025_06_09_1520.png",
+      "nutrition": {
+        "kilojoules": 1404,
+        "protein_grams": 4.5,
+        "fat_grams": 15,
+        "carbohydrate_grams": 45,
+        "fiber_grams": 1.5
+      },
+      "items": {
+        "Blueberry Muffin": {
+          "kilojoules": 1400,
+          "protein_grams": 4.5,
+          "fat_grams": 15.0,
+          "carbohydrate_grams": 45.0,
+          "fiber_grams": 1.5
+        },
+        "Tea (unsweetened, no milk)": {
+          "kilojoules": 4,
+          "protein_grams": 0.0,
+          "fat_grams": 0.0,
+          "carbohydrate_grams": 0.0,
+          "fiber_grams": 0.0
+        }
+      }
+    }
+  ],
+  "daily_tracking_summary": {
+    "date": "2025-05-21",
+    "energy_quota": {
+      "total_kj": null,
+      "baseline_kj": null,
+      "exercise_kj": 0
+    },
+    "tracking_details": {
+      "energy": {
+        "consumed_kj": 4730,
+        "target_kj": null,
+        "unit": "kJ",
+        "percentage": 100
+      },
+      "protein": {
+        "consumed_g": 61.5,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 100
+      },
+      "fat": {
+        "consumed_g": 56,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 100
+      },
+      "carbs": {
+        "consumed_g": 127,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 100
+      },
+      "fiber": {
+        "consumed_g": 11.5,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 100
+      }
+    }
   }
 }

@@ -8,6 +8,8 @@ import * as WSClient from './js/wsclient.js';
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize UI
   UI.initializeUI();
+  UI.initializeCollapsiblePanels(); 
+  UI.setupPhotoUploadLogic();   
   
   // Set up event listeners
   setupEventListeners();
@@ -62,4 +64,23 @@ function setupEventListeners() {
       UI.elements.inputEl.value = '';
     }
   });
+
+  // Estimate Nutrition button
+  if (UI.elements.estimatePhotosBtn) {
+    UI.elements.estimatePhotosBtn.addEventListener('click', () => {
+      const files = UI.elements.mealPhotoInput.files;
+      if (files && files.length > 0) {
+        const fileNames = Array.from(files).map(file => file.name);
+        
+        if (WSClient.isConnected()) {
+          WSClient.sendMealPhotoForEstimation(fileNames);
+          // Optionally, provide UI feedback, e.g., disable button, show loading
+          UI.elements.estimatePhotosBtn.disabled = true;
+          UI.elements.estimatePhotosBtn.textContent = 'Estimating...';
+          // You'll need to re-enable it when a response is received or on error
+        } 
+      } 
+    });
+  } 
+
 }

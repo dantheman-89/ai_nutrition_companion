@@ -1,0 +1,86 @@
+[
+  {
+    "id": "Breakfast",
+    "description": "Chicken congee with youtiao and pickled greens",
+    "image_url": "/static/images/PNG_2025_06_09_0801.png",
+    "nutrition": {
+      "kilojoules": 1526,
+      "protein_grams": 17,
+      "fat_grams": 23,
+      "carbohydrate_grams": 67,
+      "fiber_grams": 4
+    },
+    "items": {
+        "Chicken Congee": {
+            "kilojoules": 706,
+            "protein_grams": 10.0,
+            "fat_grams": 3.0,
+            "carbohydrate_grams": 25.0,
+            "fiber_grams": 1.0
+        },
+        "Youtiao": {
+            "kilojoules": 750,
+            "protein_grams": 6.0,
+            "fat_grams": 20.0,
+            "carbohydrate_grams": 40.0,
+            "fiber_grams": 2.0
+        },
+        "Pickled Mustard Greens": {
+            "kilojoules": 70,
+            "protein_grams": 1.0,
+            "fat_grams": 0.5,
+            "carbohydrate_grams": 2.0,
+            "fiber_grams": 1.0
+        }
+    }
+  },
+  {
+    "id": "Lunch",
+    "description": "Beef Pho",
+    "image_url": "/static/images/PNG_2025_06_09_1223.png",
+    "nutrition": {
+      "kilojoules": 2850,
+      "protein_grams": 32.0,
+      "fat_grams": 12.0,
+      "carbohydrate_grams": 90.0,
+      "fiber_grams": 2.0
+    },
+    "items": {
+        "Pho (beef with rice noodles and broth)": {
+            "kilojoules": 2850,
+            "protein_grams": 32.0,
+            "fat_grams": 12.0,
+            "carbohydrate_grams": 90.0,
+            "fiber_grams": 2.0
+        }
+    }
+  },
+  {
+    "id": "Afternoon Snack",
+    "description": "Blueberry Muffin and Tea",
+    "image_url": "/static/images/PNG_2025_06_09_1520.png",
+    "nutrition": {
+      "kilojoules": 1404,
+      "protein_grams": 4.5,
+      "fat_grams": 15,
+      "carbohydrate_grams": 45,
+      "fiber_grams": 1.5
+    },
+    "items": {
+        "Blueberry Muffin": {
+            "kilojoules": 1400,
+            "protein_grams": 4.5,
+            "fat_grams": 15.0,
+            "carbohydrate_grams": 45.0,
+            "fiber_grams": 1.5
+        },
+        "Tea (unsweetened, no milk)": {
+            "kilojoules": 4,
+            "protein_grams": 0.0,
+            "fat_grams": 0.0,
+            "carbohydrate_grams": 0.0,
+            "fiber_grams": 0.0
+        }
+    }
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "option_1",
+    "description": "High-fiber tuna poke bowl with avocado, edamame, flaxseed, broccoli, and shredded carrot",
+    "store": "Yamato Sushi",
+    "store_url": "https://www.yamatosushi.example.com",
+    "image_url": "/static/images/takeaway/poke_bowl.png",
+    "nutrition": {
+        "kilojoules": 2933,
+        "protein_grams": 32.0,
+        "fat_grams": 28.0,
+        "carbohydrate_grams": 65.0,
+        "fiber_grams": 31.0
+    }   
+  },
+  {
+    "id": "option_2",
+    "description": "Chinese bento box with white rice, stir-fried mixed vegetables, soy egg and mapo tofu",
+    "store": "Wok Express",
+    "store_url": "https://www.wokexpress.example.com/order", 
+    "image_url": "/static/images/takeaway/chinese_bento.png",
+    "nutrition": {
+        "kilojoules": 3140,
+        "protein_grams": 45.0,
+        "fat_grams": 30.0,
+        "carbohydrate_grams": 65.0,
+        "fiber_grams": 20.0
+    }
+  }
+]

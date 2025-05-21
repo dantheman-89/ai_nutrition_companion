@@ -3,7 +3,6 @@ import base64
 import json
 import pathlib
 import logging
-import io
 import traceback 
 from datetime import datetime
 import time
@@ -11,15 +10,24 @@ import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse
 from openai import AsyncOpenAI
 from openai.types.beta.realtime.session import Session, InputAudioNoiseReduction, InputAudioTranscription
+from starlette.websockets import WebSocketState
 
 from app.core.audio.convert import convert_audio_to_mp3
 from config import SYSTEM_PROMPT, OPENAI_API_KEY
-from .tools import PROFILE_TOOL_DEFINITION, update_profile_json, LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap
-from .tools import CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets
-from .tools import USER_PROFILE_FILENAME
+from .tools import (
+    PROFILE_TOOL_DEFINITION, update_profile_json, 
+    LOAD_VITALITY_DATA_TOOL_DEFINITION, load_vitality_data, 
+    LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap,
+    CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets,
+    NUTRITION_LOGGER_TOOL_DEFINITION, log_meal_photos_from_filenames,
+    RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION, get_takeaway_recommendations,
+    USER_PROFILE_FILENAME
+)
+from .send_to_client import prepare_profile_for_display, prepare_nutrition_tracking_update 
+from .util import load_json_async, save_json_async
 
 # Set up logging with timestamps and log levels
 # Set up logging with timestamps and log levels
@@ -73,30 +81,32 @@ class RealtimeSession:
         Load user profile path. For test_user, refresh the profile from the template.
         For other users, just set up the correct path.
         """
+        self.user_id = user_id # Set user_id first
+        self.user_data_dir = DATA_DIR / self.user_id
+
         if user_id == "test_user":
             # Refresh test user profile from template
             try:
                 template_path = pathlib.Path(__file__).parent / "data" / "user_profile_template.json"
-                self.user_data_dir = DATA_DIR / self.user_id
+                user_profile_target_path = self.user_data_dir / USER_PROFILE_FILENAME
                 
-                # Ensure directory exists
-                self.user_data_dir.mkdir(parents=True, exist_ok=True)
+                # Ensure directory exists (save_json_async will also do this, but good practice)
+                await asyncio.to_thread(self.user_data_dir.mkdir, parents=True, exist_ok=True)
                 
                 # Read the template file
-                with open(template_path, 'r') as template_file:
-                    template_data = json.load(template_file)
-                    
-                # Write template data to the user profile
-                with open(self.user_data_dir / USER_PROFILE_FILENAME, 'w') as profile_file:
-                    json.dump(template_data, profile_file, indent=2)
-                    
-                print(f"Test user profile refreshed from template")
+                template_data = await load_json_async(template_path, default_return_type=dict)
+                
+                if template_data:
+                    # Write template data to the user profile
+                    await save_json_async(user_profile_target_path, template_data)
+                    logger.info(f"Test user profile refreshed from template to {user_profile_target_path}")
+                else:
+                    logger.error(f"Failed to load template data from {template_path}")
+
             except Exception as e:
-                print(f"Error refreshing test user profile: {e}")
-                traceback.print_exc()
+                logger.error(f"Error refreshing test user profile: {e}", exc_info=True)
         else:
-            self.user_id = user_id
-            self.user_data_dir = DATA_DIR / self.user_id
+            logger.info(f"User set to: {user_id}, data directory: {self.user_data_dir}")
           
     async def send_voice_intro(self, intro_text: str):
         """Generates TTS audio, sends it, adds text to history, and sends text delta + done."""
@@ -172,57 +182,65 @@ class RealtimeSession:
             while True:
                 # Wait for the next message from the client
                 msg = await self.websocket.receive()
-                logger.debug(f"[CLIENT HANDLER-{task_id}] Received message type: {msg.keys()}")
-                
-                if "text" in msg:
-                    try:
-                        data = json.loads(msg.get("text"))
-                        msg_type = data.get("type")
-                        text = data.get("text", "")
-                        
-                        if msg_type == "user_message" and text != "":                           
 
-                            # Send text message to OpenAI
-                            await self.connection.conversation.item.create(
-                                item={
-                                    "type": "message",
-                                    "role": "user",
-                                    "content": [
-                                        {"type": "input_text", "text": text}
-                                    ],
-                                }
-                            )
-                            # Generate a response
-                            await self.connection.response.create()
-
-                        # commit audio buffer to finalize speech input
-                        elif msg_type == "speech_end":
-                            print(f"[CLIENT HANDLER] Speech end signal received")
-                            # Commit audio buffer to finalize speech input
-                            await self.connection.input_audio_buffer.commit()
-                            # Generate a response
-                            await self.connection.response.create()
-                            print(f"[CLIENT HANDLER] Speech committed and response requested")
-    
-                    except json.JSONDecodeError:
-                        print(f"Invalid JSON received")
-                
-                elif "bytes" in msg:
-                    # Process audio bytes from client
-                    try:
-                        # Get raw audio bytes already in pcm16 format
-                        audio_bytes = msg["bytes"]
-
-                        # Base64 encode and send to OpenAI
-                        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-                        await self.connection.input_audio_buffer.append(audio=audio_base64)
-                        
-                    except Exception as e:
-                        print(f"Error processing audio chunk: {e}")
-                        import traceback
-                        traceback.print_exc()
+                try:
+                    data = json.loads(msg.get("text"))
+                    event_type = data.get("type")
+                    payload = data.get("payload", {}) 
                     
-                    logger.debug(f"[CLIENT HANDLER-{task_id}] processed client audio event: {msg.keys()}")
+                    # Handle client sent user_messages
+                    if event_type == "user_text_message":
+                        # Send text message to OpenAI
+                        await self.connection.conversation.item.create(
+                            item={
+                                "type": "message",
+                                "role": "user",
+                                "content": [
+                                    {"type": "input_text", "text": payload.get("text")}
+                                ],
+                            }
+                        )
+                        # Generate a response
+                        await self.connection.response.create()
+
+                    elif event_type == "user_audio_chunk":
+                        audio_base64 = payload.get("audio")
+                        if audio_base64 and self.connection:
+                            await self.connection.input_audio_buffer.append(audio=audio_base64) # no more encoding required as base64 encoding was done client side
+                        else:
+                            logger.warning(f"No audio data or no OpenAI connection for audio_chunk message.")
+
+                    # Handle client sent meal photos nutrition estimation request
+                    elif event_type == "estimate_photos_nutrition": 
+                        filenames = payload.get("filenames", [])
+                        if filenames:
+                            logger.info(f"[CLIENT HANDLER-{task_id}] Received estimate_photos_by_name for: {filenames}")
+                            asyncio.create_task(self.handle_photo_estimation_request(filenames))
+                        else:
+                            logger.warning("[CLIENT HANDLER-{task_id}] estimate_photos_by_name received with no filenames.")
+
+                    # Handle client sent speech events
+                    elif event_type == "speech_start":
+                        logger.info(f"[CLIENT HANDLER-{task_id}] Speech start signal received")
+                        # no action required
+                        pass
+                    
+                    # commit audio buffer to finalize speech input
+                    elif event_type == "speech_end":
+                        # Commit audio buffer to finalize speech input
+                        await self.connection.input_audio_buffer.commit()
+                        # Generate a response
+                        await self.connection.response.create()
+
+                    # unhandled event
+                    else:
+                        logger.warning(f"[CLIENT HANDLER-{task_id}] Unknown message type received: {event_type}")
+
+                except json.JSONDecodeError:
+                    logger.error(f"[CLIENT HANDLER-{task_id}] Invalid JSON received: {msg['text']}")
+                except Exception as e:
+                    logger.error(f"[CLIENT HANDLER-{task_id}] Error processing client text message: {e}", exc_info=True)
+                
                     
         except (WebSocketDisconnect, RuntimeError):
             print("Client disconnected  (WebSocketDisconnect or RuntimeError)")
@@ -232,6 +250,61 @@ class RealtimeSession:
         except Exception as e:
             print(f"Error in recv_from_client: {e}")
             traceback.print_exc()
+            
+    async def handle_photo_estimation_request(self, filenames: list[str]):
+        """Handles the background processing of photo filenames for nutrition estimation."""
+        logger.info(f"Handling photo estimation request for filenames: {filenames}")
+        try:
+            # 1. Process photos and update profile
+            tool_output = await log_meal_photos_from_filenames(self.user_data_dir, filenames) #includes an asyncio.sleep(2) for simulated delay.
+            
+            # 2. Send the nutrition tracking update to the client UI
+            updated_profile_dict = tool_output.get("updated_full_profile")
+
+            nutrition_payload_for_client = await prepare_nutrition_tracking_update(updated_profile_dict)
+            await self.websocket.send_json({
+                "type": "nutrition_tracking_update",
+                "data": nutrition_payload_for_client
+            })
+            logger.info("Sent nutrition_tracking_update to client after photo estimation.")
+            
+            # 3. Send info to LLM by simulating a tool call and its output
+            summary_for_ai = tool_output.get("summary_for_ai", "Meal logging process completed.")
+
+            # Generate a unique call_id for this simulated tool interaction
+            simulated_call_id = f"photolog_tool_call_{int(time.time())}"
+            tool_name_for_call = NUTRITION_LOGGER_TOOL_DEFINITION["name"]
+
+            # Create the "function_call" item in the conversation
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "function_call",
+                    "call_id": simulated_call_id,
+                    "name": tool_name_for_call,
+                    "arguments": "{}" # No arguments needed for this simulated call
+                }
+            )
+
+            # Create the "function_call_output" item with the result
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "function_call_output",
+                    "call_id": simulated_call_id,
+                    "output": json.dumps({"summary": summary_for_ai}) # Tool output should be a JSON string
+                }
+            )
+            
+            # Ask OpenAI to generate a response based on this new information
+            await self.connection.response.create()
+            logger.info("Requested OpenAI response after simulated photo log tool interaction.")
+
+        except Exception as e:
+            logger.error(f"Error in handle_photo_estimation_request: {e}", exc_info=True)
+            await self.websocket.send_json({
+                "type": "photo_estimation_error", 
+                "message": f"Error processing photo estimation: {str(e)}"
+            })
+
 
     async def handle_openai_events(self):
         """
@@ -316,49 +389,61 @@ class RealtimeSession:
                 elif event.type == "response.function_call_arguments.done":
                     print(f"⟵ event ({current_time}): {event.type}, call_id: {event.call_id}, name: {event.name}, arguments: {event.arguments}") # Modified print
                     
+                    # Strip trailing parentheses if present to normalize the function name
+                    base_function_name = event.name.rstrip("()")
                     _output = None
-                    try:
-                        # --- Respond based on the function name ---
-                        # Strip trailing parentheses if present to normalize the function name
-                        base_function_name = event.name.rstrip("()")
 
-                        if base_function_name == "update_user_profile":
-                            # Call the helper function to update the profile
-                            _output = await update_profile_json(
-                                user_data_dir=self.user_data_dir, 
-                                fields_to_update=json.loads(event.arguments)
-                            )
+                    # do not respond to user generated function calls to send info to LLM
+                    if base_function_name in ["nutrition_logger_tool"]:
+                        pass
+                    else:                        
+                        try:
+                            # --- Respond based on the function name ---
+                            if base_function_name == PROFILE_TOOL_DEFINITION["name"]:
+                                # Call the helper function to update the profile
+                                _output = await update_profile_json(
+                                    user_data_dir=self.user_data_dir, 
+                                    fields_to_update=json.loads(event.arguments)
+                                )
+                                
+                            elif base_function_name == LOAD_VITALITY_DATA_TOOL_DEFINITION["name"]:
+                                # Call the helper function to load health data
+                                _output = await load_vitality_data(
+                                    user_data_dir=self.user_data_dir
+                                )
+                                
+                            elif base_function_name == CALCULATE_TARGETS_TOOL_DEFINITION["name"]:
+                                # Calculate nutrition targets based on profile data
+                                _output = await calculate_daily_nutrition_targets(
+                                    user_data_dir=self.user_data_dir
+                                )
+                                
+                            elif base_function_name == LOAD_HEALTHY_SWAP_TOOL_DEFINITION["name"]:
+                                # Load healthy swap data
+                                _output = await load_healthy_swap(
+                                    user_data_dir=self.user_data_dir
+                                )
+
+                            elif base_function_name == RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION["name"]:
+                                # Get Takeaway recommendations
+                                tool_args = json.loads(event.arguments)
+                                _output = await get_takeaway_recommendations(
+                                    user_data_dir=self.user_data_dir,
+                                    dietary_preferences=tool_args.get("dietary_preferences"),
+                                    number_of_options=tool_args.get("number_of_options", 2)
+                                )
+                            else:
+                                _output = json.dumps({
+                                    "status": "error", 
+                                    "message": f"Unknown function: {event.name}"
+                                })
+                                print(f"Unknown function called: {event.name}")
                             
-                        elif base_function_name == "load_vitality_data":
-                            # Call the helper function to load health data
-                            _output = await load_vitality_data(
-                                user_data_dir=self.user_data_dir
-                            )
-                            
-                        elif base_function_name == "calculate_daily_nutrition_targets":
-                            # Calculate nutrition targets based on profile data
-                            _output = await calculate_daily_nutrition_targets(
-                                user_data_dir=self.user_data_dir
-                            )
-                            
-                        elif base_function_name == "load_healthy_swap":
-                            # Load healthy swap data
-                            _output = await load_healthy_swap(
-                                user_data_dir=self.user_data_dir
-                            )
-                            
-                        else:
-                            _output = json.dumps({
-                                "status": "error", 
-                                "message": f"Unknown function: {event.name}"
-                            })
-                            print(f"Unknown function called: {event.name}")
-                            
-                    except Exception as e:
-                        error_message = f"Error executing function call '{event.name}': {e}"
-                        print(error_message)
-                        traceback.print_exc() # Print full traceback for debugging
-                        _output = json.dumps({"status": "error", "message": error_message})
+                        except Exception as e:
+                            error_message = f"Error executing function call '{event.name}': {e}"
+                            print(error_message)
+                            traceback.print_exc() # Print full traceback for debugging
+                            _output = json.dumps({"status": "error", "message": error_message})
                         
                     # --- Send the result back to OpenAI ---
                     try:
@@ -376,6 +461,34 @@ class RealtimeSession:
                     except Exception as send_error:
                         print(f"Error sending tool result back to OpenAI: {send_error}")
                         traceback.print_exc() # Print full traceback for debugging
+
+                    # --- Send function results to the front end to display ---
+                    if base_function_name in [PROFILE_TOOL_DEFINITION["name"], LOAD_VITALITY_DATA_TOOL_DEFINITION["name"], CALCULATE_TARGETS_TOOL_DEFINITION["name"]]:
+                        profile_display_data = await prepare_profile_for_display(self.user_data_dir)
+                        if profile_display_data: # Check if not empty            
+                            await self.websocket.send_json({
+                                "type": "profile_update",
+                                "data": profile_display_data 
+                            })
+                            print(f"Sent formatted profile_update to client after {base_function_name}")
+                        else:
+                            print(f"No profile data to display after {base_function_name}, or profile file was empty/invalid.")
+                    
+                    elif base_function_name in [RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION["name"]]:
+                        if _output:
+                            try:
+                                # _output from the tool is a JSON string like:
+                                tool_result_data = json.loads(_output)
+                                sent_to_client = tool_result_data.get("recommendations", [])
+                                
+                                # Send only the recommendations array to the client for UI rendering
+                                await self.websocket.send_json({
+                                    "type": "takeaway_recommendation",
+                                    "payload": {"recommendations": sent_to_client} # No summary_text here
+                                })
+                                logger.info(f"Sent takeaway_recommendation (recommendations only) to client.")
+                            except Exception as e_send:
+                                logger.error(f"Error sending takeaway_recommendation to client: {e_send}")
 
                 # rate_lmit update
                 elif event.type in ("rate_limits.updated"):
@@ -461,7 +574,12 @@ async def realtime_ws(ws: WebSocket):
                     ),
                     turn_detection=None, #{"type": "semantic_vad", "eagerness": "medium"},
                     max_response_output_tokens=4096,
-                    tools=[PROFILE_TOOL_DEFINITION, LOAD_VITALITY_DATA_TOOL_DEFINITION, CALCULATE_TARGETS_TOOL_DEFINITION, LOAD_HEALTHY_SWAP_TOOL_DEFINITION],
+                    tools=[PROFILE_TOOL_DEFINITION, 
+                           LOAD_VITALITY_DATA_TOOL_DEFINITION, 
+                           CALCULATE_TARGETS_TOOL_DEFINITION, 
+                           LOAD_HEALTHY_SWAP_TOOL_DEFINITION, 
+                           NUTRITION_LOGGER_TOOL_DEFINITION,
+                           RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION],
                     tool_choice="auto"
                 )
             )

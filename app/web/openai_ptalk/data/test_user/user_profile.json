@@ -53,5 +53,46 @@
     "date_recommended": null,
     "recommended_swaps": null,
     "notes": null
+  },
+  "daily_nutrition_log": [],
+  "daily_tracking_summary": {
+    "date": null,
+    "energy_quota": {
+      "total_kj": null,
+      "baseline_kj": null,
+      "exercise_kj": 0
+    },
+    "tracking_details": {
+      "energy": {
+        "consumed_kj": 0,
+        "target_kj": null,
+        "unit": "kJ",
+        "percentage": 0
+      },
+      "protein": {
+        "consumed_g": 0,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 0
+      },
+      "fat": {
+        "consumed_g": 0,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 0
+      },
+      "carbs": {
+        "consumed_g": 0,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 0
+      },
+      "fiber": {
+        "consumed_g": 0,
+        "target_g": null,
+        "unit": "g",
+        "percentage": 0
+      }
+    }
   }
 }

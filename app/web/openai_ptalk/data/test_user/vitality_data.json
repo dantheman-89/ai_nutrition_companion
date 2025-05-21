@@ -1,8 +1,8 @@
 {
     "basic": {
-        "preferred_name": "Daniel",
+        "preferred_name": "Dan",
         "age_years": 36,
-        "sex": "male" 
+        "sex": "Male" 
     },
     "status": "Gold",
     "points": {

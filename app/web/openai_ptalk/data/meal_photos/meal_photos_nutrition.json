@@ -39,19 +39,19 @@
     "description": "Beef Pho",
     "image_url": "/static/images/PNG_2025_06_09_1223.png",
     "nutrition": {
-      "kilojoules": 1800,
-      "protein_grams": 40,
-      "fat_grams": 18,
-      "carbohydrate_grams": 15,
-      "fiber_grams": 6
+      "kilojoules": 2850,
+      "protein_grams": 32.0,
+      "fat_grams": 12.0,
+      "carbohydrate_grams": 90.0,
+      "fiber_grams": 2.0
     },
     "items": {
         "Pho (beef with rice noodles and broth)": {
-            "kilojoules": 1700,
-            "protein_grams": 30.0,
-            "fat_grams": 13.5,
-            "carbohydrate_grams": 41.0,
-            "fiber_grams": 1.0
+            "kilojoules": 2850,
+            "protein_grams": 32.0,
+            "fat_grams": 12.0,
+            "carbohydrate_grams": 90.0,
+            "fiber_grams": 2.0
         }
     }
   },

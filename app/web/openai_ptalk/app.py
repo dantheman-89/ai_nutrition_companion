@@ -23,6 +23,7 @@ from .tools import (
     LOAD_HEALTHY_SWAP_TOOL_DEFINITION, load_healthy_swap,
     CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets,
     NUTRITION_LOGGER_TOOL_DEFINITION, log_meal_photos_from_filenames,
+    RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION, get_takeaway_recommendations,
     USER_PROFILE_FILENAME
 )
 from .send_to_client import prepare_profile_for_display, prepare_nutrition_tracking_update 
@@ -390,37 +391,46 @@ class RealtimeSession:
                     
                     # Strip trailing parentheses if present to normalize the function name
                     base_function_name = event.name.rstrip("()")
+                    _output = None
 
                     # do not respond to user generated function calls to send info to LLM
                     if base_function_name in ["nutrition_logger_tool"]:
                         pass
-                    else:
-                        _output = None
+                    else:                        
                         try:
                             # --- Respond based on the function name ---
-                            if base_function_name == "update_user_profile":
+                            if base_function_name == PROFILE_TOOL_DEFINITION["name"]:
                                 # Call the helper function to update the profile
                                 _output = await update_profile_json(
                                     user_data_dir=self.user_data_dir, 
                                     fields_to_update=json.loads(event.arguments)
                                 )
                                 
-                            elif base_function_name == "load_vitality_data":
+                            elif base_function_name == LOAD_VITALITY_DATA_TOOL_DEFINITION["name"]:
                                 # Call the helper function to load health data
                                 _output = await load_vitality_data(
                                     user_data_dir=self.user_data_dir
                                 )
                                 
-                            elif base_function_name == "calculate_daily_nutrition_targets":
+                            elif base_function_name == CALCULATE_TARGETS_TOOL_DEFINITION["name"]:
                                 # Calculate nutrition targets based on profile data
                                 _output = await calculate_daily_nutrition_targets(
                                     user_data_dir=self.user_data_dir
                                 )
                                 
-                            elif base_function_name == "load_healthy_swap":
+                            elif base_function_name == LOAD_HEALTHY_SWAP_TOOL_DEFINITION["name"]:
                                 # Load healthy swap data
                                 _output = await load_healthy_swap(
                                     user_data_dir=self.user_data_dir
+                                )
+
+                            elif base_function_name == RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION["name"]:
+                                # Get Takeaway recommendations
+                                tool_args = json.loads(event.arguments)
+                                _output = await get_takeaway_recommendations(
+                                    user_data_dir=self.user_data_dir,
+                                    dietary_preferences=tool_args.get("dietary_preferences"),
+                                    number_of_options=tool_args.get("number_of_options", 2)
                                 )
                             else:
                                 _output = json.dumps({
@@ -453,7 +463,7 @@ class RealtimeSession:
                         traceback.print_exc() # Print full traceback for debugging
 
                     # --- Send function results to the front end to display ---
-                    if base_function_name in ["update_user_profile", "load_vitality_data", "calculate_daily_nutrition_targets"]:
+                    if base_function_name in [PROFILE_TOOL_DEFINITION["name"], LOAD_VITALITY_DATA_TOOL_DEFINITION["name"], CALCULATE_TARGETS_TOOL_DEFINITION["name"]]:
                         profile_display_data = await prepare_profile_for_display(self.user_data_dir)
                         if profile_display_data: # Check if not empty            
                             await self.websocket.send_json({
@@ -463,6 +473,22 @@ class RealtimeSession:
                             print(f"Sent formatted profile_update to client after {base_function_name}")
                         else:
                             print(f"No profile data to display after {base_function_name}, or profile file was empty/invalid.")
+                    
+                    elif base_function_name in [RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION["name"]]:
+                        if _output:
+                            try:
+                                # _output from the tool is a JSON string like:
+                                tool_result_data = json.loads(_output)
+                                sent_to_client = tool_result_data.get("recommendations", [])
+                                
+                                # Send only the recommendations array to the client for UI rendering
+                                await self.websocket.send_json({
+                                    "type": "takeaway_recommendation",
+                                    "payload": {"recommendations": sent_to_client} # No summary_text here
+                                })
+                                logger.info(f"Sent takeaway_recommendation (recommendations only) to client.")
+                            except Exception as e_send:
+                                logger.error(f"Error sending takeaway_recommendation to client: {e_send}")
 
                 # rate_lmit update
                 elif event.type in ("rate_limits.updated"):
@@ -552,7 +578,8 @@ async def realtime_ws(ws: WebSocket):
                            LOAD_VITALITY_DATA_TOOL_DEFINITION, 
                            CALCULATE_TARGETS_TOOL_DEFINITION, 
                            LOAD_HEALTHY_SWAP_TOOL_DEFINITION, 
-                           NUTRITION_LOGGER_TOOL_DEFINITION],
+                           NUTRITION_LOGGER_TOOL_DEFINITION,
+                           RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION],
                     tool_choice="auto"
                 )
             )

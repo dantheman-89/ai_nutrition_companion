@@ -13,6 +13,7 @@ USER_PROFILE_FILENAME = "user_profile.json"
 VITALITY_DATA_FILENAME = "vitality_data.json"
 HEALTHY_SWAP_FILENAME = "healthy_swap.json"
 MEAL_PHOTOS_NUTRITION_FILENAME  = "meal_photos_nutrition.json"
+TAKEAWAY_NUTRITION_FILENAME = "takeaway_nutrition.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool Functions - LLM definition + function implementation
@@ -553,34 +554,13 @@ NUTRITION_LOGGER_TOOL_DEFINITION = {
     }
 }
 
-async def _load_json_async(file_path: pathlib.Path) -> dict | list:
-    """Helper to asynchronously load a JSON file."""
-    if not await asyncio.to_thread(file_path.exists):
-        print(f"File not found: {file_path}")
-        return {} if file_path.name == USER_PROFILE_FILENAME else [] # Return list for meal photos
-    try:
-        content = await asyncio.to_thread(file_path.read_text)
-        return json.loads(content)
-    except Exception as e:
-        print(f"Error reading or parsing JSON file {file_path}: {e}")
-        return {} if file_path.name == USER_PROFILE_FILENAME else []
-
-
-async def _save_json_async(file_path: pathlib.Path, data: dict):
-    """Helper to asynchronously save a JSON file."""
-    try:
-        await asyncio.to_thread(file_path.write_text, json.dumps(data, indent=2))
-    except Exception as e:
-        print(f"Error writing JSON file {file_path}: {e}")
-
-
 async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_filenames: list[str]) -> dict:
     """
     Processes meal photo filenames, updates user profile with nutrition info,
     and returns a summary for AI and the updated profile.
     """
     logger.info(f"Tool: log_meal_photos_from_filenames called with {photo_filenames}") # Changed print to logger
-    await asyncio.sleep(2) # Simulate processing delay
+    await asyncio.sleep(4) # Simulate processing delay
 
     profile_path = user_data_dir / USER_PROFILE_FILENAME
     meal_photos_path = pathlib.Path(__file__).parent / "data" / "meal_photos" / MEAL_PHOTOS_NUTRITION_FILENAME
@@ -706,3 +686,96 @@ async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_file
         "summary_for_ai": summary_for_ai,
         "updated_full_profile": copy.deepcopy(profile_data)
     }
+
+################################################
+###### Get Takeaway Recommendations Tool ######
+################################################
+
+RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION = {
+    "type": "function",
+    "name": "recommend_healthy_takeaway", # This name MUST match what's in config.py and app.py
+    "description": (
+        "Use this tool **whenever** the user asks for takeaway recommendations, help choosing takeaway, "
+        "suggestions for what takeaway to get, mentions wanting to order food, or is looking for meal ideas for delivery. "
+        "For example, if the user says: 'Any takeaway ideas?', 'What should I order tonight?', "
+        "'Help me find a healthy takeaway.', 'I'm thinking of ordering in.', 'What are some good takeaway options?'. "
+        "This tool provides data for 1-2 healthy takeaway meal suggestions which are then displayed in the user's UI. "
+        "The tool's JSON output also includes a 'note_to_ai' field to guide your textual response to the user. "
+        "**You MUST use this tool for such requests and DO NOT suggest takeaway dishes from your own knowledge.**"
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "dietary_preferences": {
+                "type": "string",
+                "description": "Any specific dietary preferences or restrictions the user mentioned (e.g., 'vegetarian', 'low-carb'). (Currently ignored by the prototype version of the tool, but capture if provided)."
+            },
+            "number_of_options": {
+                "type": "integer",
+                "description": "Number of takeaway options to recommend. (Currently ignored by the prototype, which returns a fixed number)."
+            }
+        },
+        "required": []
+    }
+}
+
+async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_preferences: str = None, number_of_options: int = 2) -> str:
+    """
+    Tool implementation to fetch takeaway recommendations.
+    Loads two fixed options from a JSON file.
+    Returns a JSON string containing a note for the AI and the recommendation data.
+    The recommendation data is intended for client display. The AI should use the note
+    to formulate its textual response.
+    
+    Args:
+        user_data_dir: Path to the user's data directory.
+        dietary_preferences: (Ignored in this simplified version)
+        number_of_options: (Ignored in this simplified version)
+        
+    Returns:
+        JSON string of a payload containing 'note_to_ai' and 'recommendations'.
+    """
+    logger.info(f"Tool called: get_takeaway_recommendations (simplified version - always returns fixed options)")
+    await asyncio.sleep(5) # Simulate processing delay
+    
+    base_data_dir = user_data_dir.parent 
+    takeaway_json_path = base_data_dir / "meal_photos" / TAKEAWAY_NUTRITION_FILENAME
+    
+    logger.info(f"Attempting to load takeaway data from: {takeaway_json_path}")
+
+    all_options = await load_json_async(takeaway_json_path, default_return_type=list)
+
+    if not all_options:
+        logger.warning(f"No takeaway options loaded from {takeaway_json_path}.")
+        # Prepare a note for the AI in case of no options
+        note_to_ai_text = "I tried to find takeaway recommendations, but the data file seems to be empty or missing. Please inform the user that no options are available at the moment."
+        return json.dumps({
+            "note_to_ai": note_to_ai_text,
+            "recommendations": []
+        })
+
+    selected_options = all_options[:2] 
+
+    if not selected_options:
+        note_to_ai_text = "I looked for takeaway options, but couldn't find any suitable ones from the available data. Please inform the user."
+        return json.dumps({
+            "note_to_ai": note_to_ai_text,
+            "recommendations": []
+        })
+
+    # Craft the note for the AI
+    note_to_ai_text = (
+        f"The {len(selected_options)} takeaway recommendation(s) listed in the 'recommendations' key below have been prepared and already displayed to the user in their UI. "
+        "Now, please provide a very short, witty, and encouraging comment about these choices. Do not read it out"
+        "You MUST say something like: 'Based on the food you logged and exercises you have done today, "
+        "I have worked out the energy and nutrition requirements for your dinner. "
+        f"I have recommended two takeaway options for you. Both have a lot of fiber to meet today's target. Enjoy your meal!'"
+    )
+
+    payload = {
+        "note_to_ai": note_to_ai_text,
+        "recommendations": selected_options # This is what the client UI will use
+    }
+    
+    logger.info(f"Returning fixed takeaway recommendations payload for LLM: {json.dumps(payload, indent=2)}")
+    return json.dumps(payload)

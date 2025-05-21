@@ -162,6 +162,72 @@ function scrollToBottom() {
   elements.messagesSection.scrollTop = elements.messagesSection.scrollHeight;
 }
 
+
+// --- Display Takeaway Recommendations ---
+function displayTakeawayRecommendations(payload) {
+  debug("Displaying takeaway recommendations");
+  if (!payload || !payload.recommendations || payload.recommendations.length === 0) {
+    debug("No takeaway recommendations to display or payload is invalid.");
+    return;
+  }
+
+  const aiBubble = createMessageBubble("ai", ""); // Create an empty AI bubble
+
+  // Add summary text if provided
+  if (payload.summary_text) {
+    const summaryP = document.createElement('p');
+    summaryP.textContent = payload.summary_text;
+    summaryP.style.marginBottom = '10px'; // Add some spacing
+    aiBubble.appendChild(summaryP);
+  }
+
+  const recommendationsContainer = document.createElement('div');
+  recommendationsContainer.className = 'takeaway-recommendations-container';
+
+  payload.recommendations.forEach(rec => {
+    const card = document.createElement('div');
+    card.className = 'takeaway-recommendation-card';
+
+    let nutritionHtml = '';
+    if (rec.nutrition) {
+      const nutritionItems = [
+        { key: 'Kilojoules:', value: rec.nutrition.kilojoules !== undefined ? rec.nutrition.kilojoules.toLocaleString() : 'N/A' },
+        { key: 'Protein:', value: rec.nutrition.protein_grams !== undefined ? `${rec.nutrition.protein_grams}g` : 'N/A' },
+        { key: 'Fat:', value: rec.nutrition.fat_grams !== undefined ? `${rec.nutrition.fat_grams}g` : 'N/A' },
+        { key: 'Carbs:', value: rec.nutrition.carbohydrate_grams !== undefined ? `${rec.nutrition.carbohydrate_grams}g` : 'N/A' },
+        { key: 'Fiber:', value: rec.nutrition.fiber_grams !== undefined ? `${rec.nutrition.fiber_grams}g` : 'N/A' }
+      ];
+      nutritionHtml = `
+        <ul class="nutrition-details">
+          ${nutritionItems.map(item => `<li><span class="key">${item.key}</span><span class="value">${item.value}</span></li>`).join('')}
+        </ul>
+      `;
+    }
+
+   let storeHtml = ''; // This variable holds the correct store HTML with the link
+    if (rec.store) {
+      if (rec.store_url) {
+        storeHtml = `<p class="takeaway-store">Order link: <a href="${rec.store_url}" target="_blank" rel="noopener noreferrer" class="store-link">${rec.store}</a></p>`;
+      } else {
+        storeHtml = `<p class="takeaway-store">Store: ${rec.store}</p>`;
+      }
+    }
+    
+    card.innerHTML = `
+      ${rec.image_url ? `<img src="${rec.image_url}" alt="${rec.description || 'Takeaway option'}" class="takeaway-image">` : ''}
+      <div class="takeaway-info">
+        <h4 class="takeaway-description">${rec.description || 'Takeaway Option'}</h4>
+        ${storeHtml}
+        ${nutritionHtml}
+      </div>
+    `;
+    recommendationsContainer.appendChild(card);
+  });
+
+  aiBubble.appendChild(recommendationsContainer);
+  scrollToBottom(); // Ensure the new content is visible
+}
+
 // ---------------------------------------------------------
 // Right handside info panel elements 
 // ---------------------------------------------------------
@@ -504,7 +570,8 @@ export {
   updateProfileDisplay,
   updateNutritionTrackingDisplay,
   displayProcessedMealResults,
-  setupPhotoUploadLogic
+  setupPhotoUploadLogic,
+  displayTakeawayRecommendations
 };
 
 // Add these lines for console debugging:
@@ -512,5 +579,6 @@ export {
 if (DEBUG) { // Optional: only expose if DEBUG is true
     window.testUpdateProfile = updateProfileDisplay;
     window.testUpdateNutritionTracking = updateNutritionTrackingDisplay;
+    window.testDisplayTakeawayRecommendations = displayTakeawayRecommendations;
     window.uiElements = elements; // Expose elements for inspection too
 }

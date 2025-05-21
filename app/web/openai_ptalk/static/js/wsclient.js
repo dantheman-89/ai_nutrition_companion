@@ -7,7 +7,8 @@ import {
   updateConnectionUI, 
   elements, 
   updateProfileDisplay,
-  updateNutritionTrackingDisplay
+  updateNutritionTrackingDisplay,
+  displayTakeawayRecommendations
 } from './ui.js';
 import { playAudioChunk, stopAudioCapture, } from './audio.js';
 
@@ -20,6 +21,9 @@ let userTranscriptFinalized = true;
 let aiResponseBuffer = null;
 let currentUserSpeechBubble = null;
 let lastAiElem = null;
+
+// withhold some payload until transcript is finalized
+let pendingTakeawayPayload = null
 
 
 
@@ -100,6 +104,7 @@ function handleWebSocketMessage(e) {
       case "input_audio_buffer_committed": handleInputBufferCommitted(data); break;
       case "profile_update":          updateProfileDisplay(data); break;
       case "nutrition_tracking_update": updateNutritionTrackingDisplay(data); break;
+      case "takeaway_recommendation": handleTakeawayRecommendation(data); break; 
       case "error":                   handleServerError(data); break;
       default:
         // Log other potentially useful events if needed, but less verbosely
@@ -185,6 +190,15 @@ function handleTextDone(data) {
       aiResponseBuffer = { content: "", done: true };
       debug(`Received text_done before text_delta while buffering. Initialized buffer as done: ${JSON.stringify(aiResponseBuffer)}`);
     }
+  }
+
+  // Display pending takeaway recommendations now that the AI text is complete
+  if (pendingTakeawayPayload) {
+    debug("Processing pending takeaway recommendations after AI text_done.");
+    // displayTakeawayRecommendations in ui.js creates its own new AI message bubble.
+    // This is fine as lastAiElem has been reset if the turn was fully processed.
+    displayTakeawayRecommendations(pendingTakeawayPayload);
+    pendingTakeawayPayload = null; // Clear after displaying
   }
 }
 
@@ -306,6 +320,18 @@ function setLastAiElem(elem) {
   lastAiElem = elem;
 }
 
+// Handle takeaway recommendation messages
+function handleTakeawayRecommendation(data) {
+  debug("Received takeaway recommendation from server.");
+  if (data.payload && data.payload.recommendations) { // Ensure recommendations exist
+    debug("Buffering takeaway recommendations.");
+    pendingTakeawayPayload = data.payload; // Buffer the payload
+    // Do NOT call displayTakeawayRecommendations here
+  } else {
+    debug("Takeaway recommendation payload is missing, invalid, or has no recommendations.");
+    pendingTakeawayPayload = null; // Clear any old pending payload if this one is invalid
+  }
+}
 
 //-------------------------------------------------
 // Handle client UI Buttons and Events

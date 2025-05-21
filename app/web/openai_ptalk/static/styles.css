@@ -461,6 +461,113 @@ body {
   text-align: left;
 }
 
+/* TAKEAWAY RECOMMENDATIONS (IN AI BUBBLE) */
+.takeaway-recommendations-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* Consistent gap */
+  margin-top: 10px; /* Space below summary text */
+}
+
+.takeaway-recommendation-card {
+  background-color: rgba(255, 255, 255, 0.04); /* Consistent with .tracking-card */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Consistent with .tracking-card */
+  border-radius: 8px; /* Consistent card radius */
+  padding: 12px; /* Consistent padding */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.takeaway-recommendation-card .takeaway-image {
+  width: 100%;
+  max-width: 200px; /* Max width for the image in column layout */
+  height: auto;
+  border-radius: 6px; /* Consistent image radius */
+  object-fit: cover;
+  align-self: center;
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Consistent image border */
+  margin-bottom: 5px; /* Small space below image before text */
+}
+
+.takeaway-recommendation-card .takeaway-info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* Space between info elements */
+}
+
+.takeaway-recommendation-card .takeaway-description {
+  font-weight: 600; /* Consistent with .meal-title */
+  font-size: 0.95rem; /* Consistent with .meal-title */
+  color: var(--content-text-color);
+  margin: 0;
+}
+
+.takeaway-recommendation-card .takeaway-store {
+  font-size: 0.85rem; /* Slightly smaller for secondary info */
+  color: var(--content-key-text-color);
+  margin: 0;
+}
+
+.takeaway-recommendation-card .nutrition-details {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 8px 0 0 0; /* Margin above the list */
+  font-size: var(--ui-font-size-normal); /* Standard font size */
+}
+
+.takeaway-recommendation-card .nutrition-details li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--ui-line-spacing-tight, 2px) 0; /* Tighter padding */
+  line-height: var(--ui-line-height-normal, 1.4);
+  border-bottom: 1px dashed rgba(255,255,255,0.05); /* Subtle separator */
+}
+.takeaway-recommendation-card .nutrition-details li:last-child {
+  border-bottom: none;
+}
+
+.takeaway-recommendation-card .nutrition-details .key {
+  color: var(--content-key-text-color);
+  margin-right: 8px; /* Space between key and value */
+  white-space: nowrap;
+}
+
+.takeaway-recommendation-card .nutrition-details .value {
+  color: var(--content-text-color);
+  font-weight: 500; /* Consistent with other values */
+  text-align: right;
+}
+
+.takeaway-recommendation-card .takeaway-store .store-link {
+  color: var(--pingan-orange); /* Or your preferred link color */
+  text-decoration: underline;
+  font-weight: 500; /* Make it slightly bolder */
+}
+
+.takeaway-recommendation-card .takeaway-store .store-link:hover {
+  color: var(--pingan-pink); /* Or a hover color */
+  text-decoration: none;
+}
+
+/* Responsive layout for wider screens */
+@media (min-width: 480px) { /* Adjust breakpoint as needed */
+  .takeaway-recommendation-card {
+    flex-direction: row;
+    align-items: flex-start; /* Align items to the top */
+  }
+  .takeaway-recommendation-card .takeaway-image {
+    width: 100px; /* Fixed width for image */
+    height: 100px; /* Fixed height for image */
+    max-width: none; /* Override max-width */
+    margin-bottom: 0; /* Remove bottom margin in row layout */
+    margin-right: 12px; /* Add right margin for spacing */
+    align-self: flex-start;
+  }
+}
+
 /*============================================================================*/
 /*                        COLLAPSIBLE PANELS (RIGHT SIDE)                     */
 /*============================================================================*/

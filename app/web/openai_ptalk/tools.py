@@ -1,10 +1,16 @@
 import json
 import pathlib
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 import copy
 import asyncio
 import logging
 from .util import load_json_async, save_json_async, get_nested_value
+
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart # Keep for potential HTML/plain text later
+from email.mime.text import MIMEText
+from config import SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, DEFAULT_ORGANIZER_EMAIL
 
 logger = logging.getLogger(__name__)
 
@@ -563,7 +569,7 @@ async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_file
     await asyncio.sleep(4) # Simulate processing delay
 
     profile_path = user_data_dir / USER_PROFILE_FILENAME
-    meal_photos_path = pathlib.Path(__file__).parent / "data" / "meal_photos" / MEAL_PHOTOS_NUTRITION_FILENAME
+    meal_photos_path = pathlib.Path(__file__).parent / "data" / "nutrition" / MEAL_PHOTOS_NUTRITION_FILENAME
 
     profile_data = await load_json_async(profile_path, default_return_type=dict)
     all_meal_photo_data = await load_json_async(meal_photos_path, default_return_type=list)
@@ -739,7 +745,7 @@ async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_pref
     await asyncio.sleep(5) # Simulate processing delay
     
     base_data_dir = user_data_dir.parent 
-    takeaway_json_path = base_data_dir / "meal_photos" / TAKEAWAY_NUTRITION_FILENAME
+    takeaway_json_path = base_data_dir / "nutrition" / TAKEAWAY_NUTRITION_FILENAME
     
     logger.info(f"Attempting to load takeaway data from: {takeaway_json_path}")
 
@@ -779,3 +785,65 @@ async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_pref
     
     logger.info(f"Returning fixed takeaway recommendations payload for LLM: {json.dumps(payload, indent=2)}")
     return json.dumps(payload)
+
+
+################################################
+###### Send Plain Email Tool ######
+################################################
+
+SEND_PLAIN_EMAIL_TOOL_DEFINITION = {
+    "type": "function",
+    "name": "send_plain_email",
+    "description": (
+        "Sends a plain text email to a specified recipient. "
+        "Use this for sending simple messages, summaries, or follow-ups. "
+        "Always confirm the recipient's email address and the main content of the email with the user before calling this tool."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "email_address": {
+                "type": "string",
+                "description": "The email address of the person to send the email to."
+            },
+            "subject": {
+                "type": "string",
+                "description": "The subject of the email."
+            },
+            "body": {
+                "type": "string",
+                "description": "The main text content of the email."
+            }
+        },
+        "required": ["email_address", "subject", "body"]
+    }
+}
+
+async def send_plain_email(email_address: str, subject: str, body: str):
+    logger.info(f"Tool 'send_plain_email' called for {email_address} with subject '{subject}'")
+
+    if not all([SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, DEFAULT_ORGANIZER_EMAIL]):
+        logger.error("SMTP configuration is missing. Cannot send email.")
+        return json.dumps({"status": "error", "message": "Server configuration error: SMTP settings not found."})
+
+    sender_email = DEFAULT_ORGANIZER_EMAIL # Or SMTP_USERNAME, typically the same for this setup
+    
+    msg = MIMEMultipart() # Using MIMEMultipart allows for future expansion (e.g. HTML email)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = email_address
+    
+    # Attach plain text body
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls(context=context)
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(sender_email, email_address, msg.as_string())
+        logger.info(f"Email sent to {email_address} with subject '{subject}'")
+        return json.dumps({"status": "success", "message": f"Email with subject '{subject}' sent to {email_address}."})
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        return json.dumps({"status": "error", "message": f"Failed to send email. Error: {e}"})

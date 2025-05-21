@@ -146,7 +146,12 @@ function updateButtonUI(isActive) {
  // Create a new message bubble in the chat
 function createMessageBubble(sender, initialText) {
   const bubbleDiv = document.createElement("div");
-  bubbleDiv.textContent = initialText;
+
+  // Convert **bold** Markdown to <strong>bold</strong> HTML
+  let htmlText = initialText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+  bubbleDiv.textContent = htmlText;
+  
   if (sender === "user") {
     // Only use the base classes, not Tailwind classes since we defined them in CSS
     bubbleDiv.className = "message-bubble user-message";

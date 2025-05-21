@@ -3,28 +3,25 @@
     "date_recommended": "2025-05-05",
     "recommended_swaps": [
       {
-        "purchase_category": "Breakfast Cereal",
-        "original_item_example": "Sugary Puffs",
-        "recommended_swap": "High-Fibre Bran Flakes",
-        "reason": "Lower sugar content, higher dietary fibre for better digestion."
+        "id": "rec_1",
+        "title": "Swap 1–2 Processed Meats per Week",
+        "observation": "Frequent purchases of bacon, salami, and sausages",
+        "action": "Swap to chicken or turkey sausage, or sliced roast chicken instead of ham or salami.",
+        "rationale": "Cuts back on salt and saturated fat, but still tastes familiar."
       },
       {
-        "purchase_category": "Yogurt",
-        "original_item_example": "Full-Fat Flavoured Yogurt",
-        "recommended_swap": "Low-Fat Plain Yogurt or Greek Yogurt",
-        "reason": "Lower saturated fat and added sugar. Add fresh fruit for flavour."
+        "id": "rec_2",
+        "title": "Add 2 Vegetables a Day",
+        "observation": "No visible vegetable purchases",
+        "action": "Pick 2 easy veggies like spinach or frozen stir-fry mix and add to meals you already make.",
+        "rationale": "More fiber and nutrients with almost no extra effort."
       },
       {
-        "purchase_category": "Bread",
-        "original_item_example": "Standard White Bread",
-        "recommended_swap": "Wholewheat or Seeded Brown Bread",
-        "reason": "Higher fibre content, more sustained energy release."
-      },
-      {
-        "purchase_category": "Cold Drinks",
-        "original_item_example": "Sugar-Sweetened Soda",
-        "recommended_swap": "Water, Sugar-Free Sparkling Water, Unsweetened Iced Tea",
-        "reason": "Reduces intake of empty calories and added sugars."
+        "id": "rec_3",
+        "title": "Try 1 Legume Each Week (Start with String Beans)",
+        "observation": "No legumes in basket",
+        "action": "Start with string beans in stir-fries, then try canned lentils or chickpeas in wraps or stews.",
+        "rationale": "Easy protein and fiber boost from plants."
       }
     ],
     "notes": "Recommendations based on recent HealthyFood tagged purchases. Encouraging swaps towards items with higher fibre, lower sugar, and healthier fats."

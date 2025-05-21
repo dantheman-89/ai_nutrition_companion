@@ -24,6 +24,7 @@ from .tools import (
     CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets,
     NUTRITION_LOGGER_TOOL_DEFINITION, log_meal_photos_from_filenames,
     RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION, get_takeaway_recommendations,
+    SEND_PLAIN_EMAIL_TOOL_DEFINITION, send_plain_email,
     USER_PROFILE_FILENAME
 )
 from .send_to_client import prepare_profile_for_display, prepare_nutrition_tracking_update 
@@ -432,6 +433,15 @@ class RealtimeSession:
                                     dietary_preferences=tool_args.get("dietary_preferences"),
                                     number_of_options=tool_args.get("number_of_options", 2)
                                 )
+
+                            elif base_function_name == SEND_PLAIN_EMAIL_TOOL_DEFINITION["name"]:
+                                tool_args = json.loads(event.arguments) 
+                                _output = await send_plain_email( # Call the new function
+                                    email_address=tool_args.get("email_address"),
+                                    subject=tool_args.get("subject"),
+                                    body=tool_args.get("body") # New parameter
+                                )
+
                             else:
                                 _output = json.dumps({
                                     "status": "error", 
@@ -579,7 +589,8 @@ async def realtime_ws(ws: WebSocket):
                            CALCULATE_TARGETS_TOOL_DEFINITION, 
                            LOAD_HEALTHY_SWAP_TOOL_DEFINITION, 
                            NUTRITION_LOGGER_TOOL_DEFINITION,
-                           RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION],
+                           RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION,
+                           SEND_PLAIN_EMAIL_TOOL_DEFINITION],
                     tool_choice="auto"
                 )
             )

@@ -143,17 +143,29 @@ function updateButtonUI(isActive) {
 // Chat UI elements 
 // ---------------------------------------------------------
 
- // Create a new message bubble in the chat
+// Text Formatting Helper
+function formatTextForHTML(text) {
+  if (typeof text !== 'string') {
+    return '';
+  }
+  // First, replace newlines with <br>, then process bold markdown.
+  // This order ensures that **text\nwithbold** becomes <strong>text<br>withbold</strong>.
+  return text
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// Create a new message bubble in the chat
+// Create a new message bubble in the chat
 function createMessageBubble(sender, initialText) {
   const bubbleDiv = document.createElement("div");
 
-  // Convert **bold** Markdown to <strong>bold</strong> HTML
-  let htmlText = initialText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-  bubbleDiv.textContent = htmlText;
+  // Store the raw initial text
+  bubbleDiv.dataset.rawText = initialText;
+  // Use the formatter and set innerHTML
+  bubbleDiv.innerHTML = formatTextForHTML(initialText);
   
   if (sender === "user") {
-    // Only use the base classes, not Tailwind classes since we defined them in CSS
     bubbleDiv.className = "message-bubble user-message";
   } else { // AI
     bubbleDiv.className = "message-bubble ai-message";
@@ -161,6 +173,22 @@ function createMessageBubble(sender, initialText) {
   elements.messagesSection.appendChild(bubbleDiv);
   scrollToBottom();
   return bubbleDiv;
+}
+
+// New function to update existing message bubble content
+function updateMessageBubbleContent(bubbleElement, newRawTextChunk) {
+  if (!bubbleElement) return;
+
+  // Retrieve current raw text, append new chunk
+  let currentRawText = bubbleElement.dataset.rawText || "";
+  currentRawText += newRawTextChunk;
+  
+  // Store updated raw text
+  bubbleElement.dataset.rawText = currentRawText;
+  
+  // Re-render the entire bubble content with formatting
+  bubbleElement.innerHTML = formatTextForHTML(currentRawText);
+  scrollToBottom(); // Ensure visibility
 }
 
 function scrollToBottom() {
@@ -566,6 +594,8 @@ export {
   updateConnectionUI,
   updateButtonUI,
   createMessageBubble,
+  updateMessageBubbleContent,
+  formatTextForHTML,
   debug,
   scrollToBottom,
   connectionState,

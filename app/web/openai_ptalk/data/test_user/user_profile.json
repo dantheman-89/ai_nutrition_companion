@@ -4,20 +4,20 @@
     "age_years": 36,
     "sex": "Male",
     "height_cm": 179,
-    "weight_kg": 73,
-    "bmi_kg_m2": 22.8
+    "weight_kg": 72.8,
+    "bmi_kg_m2": 22.7
   },
   "goals": {
     "weight_goals": {
       "target_weight_kg": 68,
-      "goal_timeframe_weeks": 26
+      "goal_timeframe_weeks": 16
     },
     "nutritional_goals": {
-      "daily_kilojoules": 7518,
-      "protein_grams": 117,
-      "fat_grams": 50,
-      "carbohydrate_grams": 220,
-      "fiber_grams": 25
+      "daily_kilojoules": 7013,
+      "protein_grams": 116,
+      "fat_grams": 47,
+      "carbohydrate_grams": 197,
+      "fiber_grams": 23
     },
     "ready_to_calculate_goal": true,
     "goal_set": true

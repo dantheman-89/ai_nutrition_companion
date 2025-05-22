@@ -809,6 +809,7 @@ async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_pref
     # Craft the note for the AI
     note_to_ai_text = (
         f"The {len(selected_options)} takeaway recommendation(s) listed in the 'recommendations' key below have been prepared and already displayed to the user in their UI. "
+        "We also saw the user did a 1 hour workout today with gave them 1500 kj extra energy budget. "
         "Now, please provide a very short, witty, and encouraging comment about these choices. Do not read it out"
         "You MUST say something like: 'Based on the food you logged and exercises you have done today, "
         "I have worked out the energy and nutrition requirements for your dinner. "

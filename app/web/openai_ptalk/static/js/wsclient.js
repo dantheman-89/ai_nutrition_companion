@@ -1,7 +1,8 @@
 // WebSocket Module - Handles communication with the server
 import {
   debug, 
-  createMessageBubble, 
+  createMessageBubble,
+  updateMessageBubbleContent,
   scrollToBottom, 
   connectionState, 
   updateConnectionUI, 
@@ -123,16 +124,18 @@ function handleWebSocketMessage(e) {
 // Handle text delta messages
 function handleTextDelta(data) {
   debug(`>>> handleTextDelta received: ${data.content}. userTranscriptFinalized=${userTranscriptFinalized}`);
+  const newRawTextChunk = data.content || "";
+
   if (!userTranscriptFinalized) {
     // Buffer AI response if user transcript isn't done yet
     debug("Buffering AI text delta (user transcript pending).");
     if (aiResponseBuffer === null) {
       // Start buffering
-      aiResponseBuffer = { content: data.content || "", done: false };
+      aiResponseBuffer = { content: newRawTextChunk, done: false };
       debug(`Initialized aiResponseBuffer: ${JSON.stringify(aiResponseBuffer)}`);
     } else {
       // Append to existing buffer
-      aiResponseBuffer.content += data.content || "";
+      aiResponseBuffer.content += newRawTextChunk;
       debug(`Appended to aiResponseBuffer: ${JSON.stringify(aiResponseBuffer)}`);
     }
   } else {
@@ -140,28 +143,21 @@ function handleTextDelta(data) {
     debug("Processing AI text delta (user transcript finalized or pre-speech).");
     if (lastAiElem === null) {
       debug("Creating new AI bubble. lastAiElem was null.");
-      lastAiElem = createMessageBubble("ai", "AI: ");
-      // Add buffered content (if any) + current delta
-      let initialContent = "";
+      let fullInitialRawText = "Al: "; // Using "Al: " from your image
       if (aiResponseBuffer !== null) {
         debug(`Prepending buffered AI content: ${aiResponseBuffer.content}`);
-        initialContent += aiResponseBuffer.content;
+        fullInitialRawText += aiResponseBuffer.content;
+        // Clear buffer AFTER using its content for the initial bubble
+        debug("Clearing aiResponseBuffer after prepending for new bubble.");
+        aiResponseBuffer = null; 
       }
-      initialContent += data.content || "";
-      lastAiElem.textContent += initialContent;
-      // If buffer existed and was processed, clear it now
-      if (aiResponseBuffer !== null) {
-        debug("Clearing aiResponseBuffer after prepending.");
-        aiResponseBuffer = null;
-      }
+      fullInitialRawText += newRawTextChunk;
+      lastAiElem = createMessageBubble("ai", fullInitialRawText); 
     } else {
       // Append the current delta to existing bubble
-      debug(`Appending delta "${data.content || ''}" to existing AI bubble.`);
-      if (data.content) {
-        lastAiElem.textContent += data.content;
-      }
+      debug(`Updating existing AI bubble with delta: "${newRawTextChunk}"`);
+      updateMessageBubbleContent(lastAiElem, newRawTextChunk);
     }
-    scrollToBottom();
   }
 }
 
@@ -212,19 +208,17 @@ function handleAudioChunk(data) {
 // Handle transcript delta messages
 function handleTranscriptDelta(data) {
   debug(`>>> handleTranscriptDelta received: ${data.content}`);
-  // Simplified logic
+  const newRawTextChunk = data.content || "";
+
   if (currentUserSpeechBubble === null) {
     debug("Creating user speech bubble for first transcript delta.");
-    // Initialize with the first delta content directly
-    currentUserSpeechBubble = createMessageBubble("user", "You: " + (data.content || ""));
+    // Initialize with the first delta content directly, including "You: " prefix
+    currentUserSpeechBubble = createMessageBubble("user", "You: " + newRawTextChunk);
   } else {
     // Append subsequent deltas
-    debug(`Appending transcript delta "${data.content || ''}" to user bubble.`);
-    if (data.content) { // Ensure content exists before appending
-      currentUserSpeechBubble.textContent += data.content;
-    }
+    debug(`Updating existing user bubble with transcript delta: "${newRawTextChunk}"`);
+    updateMessageBubbleContent(currentUserSpeechBubble, newRawTextChunk);
   }
-  scrollToBottom();
 }
 
 
@@ -233,19 +227,22 @@ function handleTranscriptDone(data) {
   debug("Received input_audio_transcript_done. Finalizing user transcript.");
   currentUserSpeechBubble = null; // Release focus from user bubble
 
-  let wasBufferProcessed = false;
+  let wasBufferProcessed = false; // This variable is from your existing logic
   // Process any buffered AI content immediately
   if (aiResponseBuffer !== null) {
     debug(`Processing buffered AI content: ${JSON.stringify(aiResponseBuffer)}`);
-    if (aiResponseBuffer.content) { // Only create bubble if there's content
+    if (aiResponseBuffer.content) { // Only process if there's content
+      const bufferedAIRawContent = aiResponseBuffer.content;
       if (lastAiElem === null) {
         debug("Creating new AI bubble for buffered content in handleTranscriptDone.");
-        lastAiElem = createMessageBubble("ai", "AI: ");
+        lastAiElem = createMessageBubble("ai", "Al: " + bufferedAIRawContent); // Using "Al: "
+      } else {
+        // If lastAiElem exists, it means some part of AI response might have already streamed.
+        // Append the rest of the buffered content.
+        debug(`Updating existing AI bubble with buffered content: "${bufferedAIRawContent}"`);
+        updateMessageBubbleContent(lastAiElem, bufferedAIRawContent);
       }
-      // Append the entire buffer content
-      debug(`Appending buffered content "${aiResponseBuffer.content}" to AI bubble.`);
-      lastAiElem.textContent += aiResponseBuffer.content;
-      scrollToBottom();
+      // scrollToBottom(); // createMessageBubble and updateMessageBubbleContent in ui.js now handle this
     }
     wasBufferProcessed = true;
   }
@@ -255,8 +252,8 @@ function handleTranscriptDone(data) {
   debug(`userTranscriptFinalized set to TRUE.`);
 
   // Check if the AI text stream had already finished (buffer marked as done)
-  if (wasBufferProcessed && aiResponseBuffer.done) {
-    debug("Buffered content was processed and marked as done. Resetting lastAiElem.");
+  if (wasBufferProcessed && aiResponseBuffer && aiResponseBuffer.done) {
+    debug("Buffered content was processed and AI stream was already done. Resetting lastAiElem.");
     lastAiElem = null; // Reset AI bubble, turn is complete
   }
 

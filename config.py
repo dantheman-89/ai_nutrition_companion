@@ -73,6 +73,8 @@ SYSTEM_PROMPT = (
             AI: "Sure, I can do that! What email address should I use?"
             (User provides details, AI might help formulate the subject and body content if needed)
             AI: "Alright, sending that email now!" (Then calls the tool)
+    12. Find food recipes: if you are asked to find recipes using a specific ingredient, reply with a very short description of the dish instead of the full recipe. 
+        - When the user asks you to send the receipe via email, you should find the full receipe and send it via email. 
 
     
     INITIAL FLOW - Follow Strictly

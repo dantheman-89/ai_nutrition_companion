@@ -20,6 +20,7 @@ VITALITY_DATA_FILENAME = "vitality_data.json"
 HEALTHY_SWAP_FILENAME = "healthy_swap.json"
 MEAL_PHOTOS_NUTRITION_FILENAME  = "meal_photos_nutrition.json"
 TAKEAWAY_NUTRITION_FILENAME = "takeaway_nutrition.json"
+WEEKLY_SUMMARY_FILENAME = "weekly_summary.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool Functions - LLM definition + function implementation
@@ -655,7 +656,7 @@ async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_file
         })
 
     # Initialize/Update daily_tracking_summary
-    today_str = date.today().isoformat()
+    today_str = datetime.date.today().isoformat()
     nutritional_goals = profile_data.get("goals", {}).get("nutritional_goals", {})
 
     if "daily_tracking_summary" not in profile_data or \
@@ -823,6 +824,58 @@ async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_pref
     
     logger.info(f"Returning fixed takeaway recommendations payload for LLM: {json.dumps(payload, indent=2)}")
     return json.dumps(payload)
+
+
+################################################
+###### Get Weekly Review Data Tool ######
+################################################
+
+GET_WEEKLY_REVIEW_TOOL_DEFINITION = {
+    "type": "function",
+    "name": "get_weekly_review_data",
+    "description": "An internal tool that loads the user's weekly nutrition summary. This tool is triggered by the system when the user requests their weekly review. Do not call this tool directly.",
+    "parameters": {
+        "type": "object",
+        "properties": {}, # No parameters needed as it reads a fixed file for the user
+        "required": []
+    }
+}
+
+async def get_weekly_review_data_for_llm(user_data_dir: pathlib.Path) -> dict:
+    """
+    Loads the weekly summary data for the user.
+    Returns a dictionary containing a summary for the AI and the raw data for the client.
+    """
+    weekly_summary_path = user_data_dir / WEEKLY_SUMMARY_FILENAME
+    logger.info(f"Tool: get_weekly_review_data_for_llm attempting to load {weekly_summary_path}")
+    await asyncio.sleep(0.5) # Simulate short processing delay
+
+    weekly_data = await load_json_async(weekly_summary_path, default_return_type=dict)
+
+    if not weekly_data:
+        logger.warning(f"Weekly summary data not found or empty at {weekly_summary_path}")
+        return {
+            "summary_for_ai": "I tried to load the weekly review, but the data seems to be missing. Please inform the user.",
+            "raw_data_for_client": {}
+        }
+
+    # Basic summarization for the AI
+    total_energy_actual = get_nested_value(weekly_data, "weekly_review_summary.total_energy.actual_kj", "N/A")
+    total_energy_target = get_nested_value(weekly_data, "weekly_review_summary.total_energy.target_kj", "N/A")
+    
+    summary_for_ai = (
+        f"The user's weekly nutrition summary for the period '{get_nested_value(weekly_data, 'weekly_review_summary.period_label', 'N/A')}' has been loaded and displayed in their UI. "
+        f"Their total energy intake was {total_energy_actual} kJ against a target of {total_energy_target} kJ. "
+        "Please provide a brief, encouraging comment and find practical insights that the user can work on to better reach target. "
+        "Avoid re-stating all the numbers as they can see the details."
+    )
+    
+    logger.info(f"Tool get_weekly_review_data_for_llm summary for AI: {summary_for_ai}")
+    return {
+        "summary_for_ai": summary_for_ai,
+        "raw_data_for_client": weekly_data # This is the full data for the client UI
+    }
+
 
 
 ################################################

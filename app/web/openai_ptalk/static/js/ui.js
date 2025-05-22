@@ -68,7 +68,7 @@ function initializeUI() {
   updateNutritionTrackingDisplay({});
   updateWeeklyReviewDisplay({});
   
-  showChatScreen(); // Debug code, remove this line in production
+  // showChatScreen(); // Debug code, remove this line in production
   
   // Add window resize handler to adjust message container height
   window.addEventListener('resize', adjustMessageContainerHeight);
@@ -609,6 +609,12 @@ const COLOR_RED = '#b91c1c';   // --over-quota-red
 function updateWeeklyReviewDisplay(msg) {
   const data = msg && msg.payload ? msg.payload : {};
   debug("Updating Weekly Review panel with data:", data);
+
+  // Re-enable the button once data processing starts (or finishes)
+  if (elements.loadWeeklyReviewBtn) {
+    elements.loadWeeklyReviewBtn.disabled = false;
+    elements.loadWeeklyReviewBtn.textContent = 'Review Last 7 Days';
+  }
 
   if (!elements.weeklyReviewContentArea) { /* ... */ return; }
   if (!elements.weeklyReviewSummaryContainer || /* ... */ !elements.energyRingSVG || !elements.energyRingTrack || !elements.energyRingProgress) { /* ... */ return; }

@@ -24,6 +24,7 @@ from .tools import (
     CALCULATE_TARGETS_TOOL_DEFINITION, calculate_daily_nutrition_targets,
     NUTRITION_LOGGER_TOOL_DEFINITION, log_meal_photos_from_filenames,
     RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION, get_takeaway_recommendations,
+    GET_WEEKLY_REVIEW_TOOL_DEFINITION, get_weekly_review_data_for_llm,
     SEND_PLAIN_EMAIL_TOOL_DEFINITION, send_plain_email,
     USER_PROFILE_FILENAME
 )
@@ -220,6 +221,11 @@ class RealtimeSession:
                         else:
                             logger.warning("[CLIENT HANDLER-{task_id}] estimate_photos_by_name received with no filenames.")
 
+                    # Handle client request for weekly review
+                    elif event_type == "request_weekly_review":
+                        logger.info(f"[CLIENT HANDLER-{task_id}] Received request_weekly_review")
+                        asyncio.create_task(self.handle_weekly_review_request())
+
                     # Handle client sent speech events
                     elif event_type == "speech_start":
                         logger.info(f"[CLIENT HANDLER-{task_id}] Speech start signal received")
@@ -273,7 +279,7 @@ class RealtimeSession:
             summary_for_ai = tool_output.get("summary_for_ai", "Meal logging process completed.")
 
             # Generate a unique call_id for this simulated tool interaction
-            simulated_call_id = f"photolog_tool_call_{int(time.time())}"
+            simulated_call_id = f"plog_tc_{int(time.time())}"
             tool_name_for_call = NUTRITION_LOGGER_TOOL_DEFINITION["name"]
 
             # Create the "function_call" item in the conversation
@@ -304,6 +310,63 @@ class RealtimeSession:
             await self.websocket.send_json({
                 "type": "photo_estimation_error", 
                 "message": f"Error processing photo estimation: {str(e)}"
+            })
+    
+    async def handle_weekly_review_request(self):
+        """Handles the request for weekly review data."""
+        logger.info("Handling weekly review request.")
+        try:
+            # 1. Get weekly review data (for LLM and client)
+            review_tool_output = await get_weekly_review_data_for_llm(self.user_data_dir)
+            
+            raw_data_for_client = review_tool_output.get("raw_data_for_client")
+            summary_for_ai = review_tool_output.get("summary_for_ai", "Weekly review data loaded.")
+
+            # 2. Send the raw data to the client UI
+            if raw_data_for_client:
+                await self.websocket.send_json({
+                    "type": "weekly_review_data",
+                    "payload": raw_data_for_client
+                })
+                logger.info("Sent weekly_review_data to client.")
+            else:
+                # Send an empty payload or error if data couldn't be loaded
+                await self.websocket.send_json({
+                    "type": "weekly_review_data",
+                    "payload": {},
+                    "error": "Could not load weekly review data." 
+                })
+                logger.warning("Weekly review data for client was empty.")
+
+            # 3. Send info to LLM by simulating a tool call
+            simulated_call_id = f"wrev_tc_{int(time.time())}"
+            tool_name_for_call = GET_WEEKLY_REVIEW_TOOL_DEFINITION["name"]
+
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "function_call",
+                    "call_id": simulated_call_id,
+                    "name": tool_name_for_call,
+                    "arguments": "{}" # No arguments needed for this simulated call
+                }
+            )
+
+            await self.connection.conversation.item.create(
+                item={
+                    "type": "function_call_output",
+                    "call_id": simulated_call_id,
+                    "output": json.dumps({"summary": summary_for_ai}) # Tool output should be a JSON string
+                }
+            )
+            
+            await self.connection.response.create()
+            logger.info("Requested OpenAI response after simulated weekly review tool interaction.")
+
+        except Exception as e:
+            logger.error(f"Error in handle_weekly_review_request: {e}", exc_info=True)
+            await self.websocket.send_json({
+                "type": "weekly_review_error", 
+                "message": f"Error processing weekly review: {str(e)}"
             })
 
 
@@ -395,7 +458,8 @@ class RealtimeSession:
                     _output = None
 
                     # do not respond to user generated function calls to send info to LLM
-                    if base_function_name in ["nutrition_logger_tool"]:
+                    if base_function_name in [NUTRITION_LOGGER_TOOL_DEFINITION["name"], 
+                                              GET_WEEKLY_REVIEW_TOOL_DEFINITION["name"]]:
                         pass
                     else:                        
                         try:
@@ -590,6 +654,7 @@ async def realtime_ws(ws: WebSocket):
                            LOAD_HEALTHY_SWAP_TOOL_DEFINITION, 
                            NUTRITION_LOGGER_TOOL_DEFINITION,
                            RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION,
+                           GET_WEEKLY_REVIEW_TOOL_DEFINITION,
                            SEND_PLAIN_EMAIL_TOOL_DEFINITION],
                     tool_choice="auto"
                 )

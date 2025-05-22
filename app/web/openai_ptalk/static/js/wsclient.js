@@ -311,14 +311,6 @@ function sendTextMessage(text) {
   return true;
 }
 
-function setCurrentUserSpeechBubble(bubble) {
-  currentUserSpeechBubble = bubble;
-}
-
-function setLastAiElem(elem) {
-  lastAiElem = elem;
-}
-
 // Handle takeaway recommendation messages
 function handleTakeawayRecommendation(data) {
   debug("Received takeaway recommendation from server.");
@@ -379,6 +371,28 @@ function sendMealPhotoForEstimation(fileNamesArray) {
   return true; 
 }
 
+
+function requestWeeklyReviewData() {
+  if (!isConnected()) {
+    debug("Cannot request weekly review: WebSocket not connected.");
+    // Optionally, show an error to the user or disable the button if not connected
+    // For now, just log and return false
+    if (elements.loadWeeklyReviewBtn) { // Attempt to re-enable if it was disabled
+        elements.loadWeeklyReviewBtn.disabled = false;
+        elements.loadWeeklyReviewBtn.textContent = 'Review Last 7 Days';
+    }
+    return false;
+  }
+
+  const message = {
+    type: "request_weekly_review"
+  };
+  ws.send(JSON.stringify(message));
+  debug("Sent request_weekly_review to backend.");
+  return true;
+}
+
+
 // Export public API
 export {
   wsConnected,
@@ -387,6 +401,7 @@ export {
   disconnect,
   sendTextMessage,
   sendMealPhotoForEstimation,
+  requestWeeklyReviewData,
   isConnected,
   getWebSocket
 };

@@ -48,7 +48,7 @@ function setupEventListeners() {
   
   // Record button
   UI.elements.recordBtn.addEventListener('click', () => {
-    if (Audio.isRecording) {
+    if (Audio.isRecording) {d
       Audio.stopAudioCapture();
     } else {
       Audio.startAudioCapture(WSClient.isConnected(), WSClient.getWebSocket());

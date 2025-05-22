@@ -9,7 +9,8 @@ import {
   elements, 
   updateProfileDisplay,
   updateNutritionTrackingDisplay,
-  displayTakeawayRecommendations
+  displayTakeawayRecommendations,
+  updateWeeklyReviewDisplay
 } from './ui.js';
 import { playAudioChunk, stopAudioCapture, } from './audio.js';
 
@@ -105,7 +106,8 @@ function handleWebSocketMessage(e) {
       case "input_audio_buffer_committed": handleInputBufferCommitted(data); break;
       case "profile_update":          updateProfileDisplay(data); break;
       case "nutrition_tracking_update": updateNutritionTrackingDisplay(data); break;
-      case "takeaway_recommendation": handleTakeawayRecommendation(data); break; 
+      case "takeaway_recommendation": handleTakeawayRecommendation(data); break;
+      case "weekly_review_data":      updateWeeklyReviewDisplay(data); break; 
       case "error":                   handleServerError(data); break;
       default:
         // Log other potentially useful events if needed, but less verbosely
@@ -143,7 +145,7 @@ function handleTextDelta(data) {
     debug("Processing AI text delta (user transcript finalized or pre-speech).");
     if (lastAiElem === null) {
       debug("Creating new AI bubble. lastAiElem was null.");
-      let fullInitialRawText = "Al: "; // Using "Al: " from your image
+      let fullInitialRawText = ""; // Using "Al: " from your image
       if (aiResponseBuffer !== null) {
         debug(`Prepending buffered AI content: ${aiResponseBuffer.content}`);
         fullInitialRawText += aiResponseBuffer.content;
@@ -212,8 +214,8 @@ function handleTranscriptDelta(data) {
 
   if (currentUserSpeechBubble === null) {
     debug("Creating user speech bubble for first transcript delta.");
-    // Initialize with the first delta content directly, including "You: " prefix
-    currentUserSpeechBubble = createMessageBubble("user", "You: " + newRawTextChunk);
+    // Initialize with the first delta content directly
+    currentUserSpeechBubble = createMessageBubble("user", newRawTextChunk);
   } else {
     // Append subsequent deltas
     debug(`Updating existing user bubble with transcript delta: "${newRawTextChunk}"`);
@@ -235,7 +237,7 @@ function handleTranscriptDone(data) {
       const bufferedAIRawContent = aiResponseBuffer.content;
       if (lastAiElem === null) {
         debug("Creating new AI bubble for buffered content in handleTranscriptDone.");
-        lastAiElem = createMessageBubble("ai", "Al: " + bufferedAIRawContent); // Using "Al: "
+        lastAiElem = createMessageBubble("ai", bufferedAIRawContent); // Using "Al: "
       } else {
         // If lastAiElem exists, it means some part of AI response might have already streamed.
         // Append the rest of the buffered content.

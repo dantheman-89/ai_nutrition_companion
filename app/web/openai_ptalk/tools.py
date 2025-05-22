@@ -340,6 +340,7 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
         error_msg = f"Error processing file {vitality_data_path} or updating profile {user_profile_path}: {e}"
         print(error_msg)
 
+
 ################################################    
 ###### Load Healthy Swap Data ######
 ################################################
@@ -347,58 +348,94 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
 LOAD_HEALTHY_SWAP_TOOL_DEFINITION = {
     "type": "function",
     "name": "load_healthy_swap",
-    "description": "Loads the user's healthy food swap recommendations and history from their profile. Provides information about NBA (Next Best Action) recommendations and previously suggested healthy alternatives.",
+    "description": (
+        "Loads personalized healthy food swap recommendations for the user. "
+        "These recommendations are based on their recent grocery shopping data "
+        "and aim to improve dietary choices by suggesting swaps towards healthier food items. "
+        "Use this when the user asks for healthy swaps, ways to improve their shopping, or as a next step after setting nutrition goals. "
+        "The tool output includes a 'note_to_ai' to guide your response and 'recommendations' for the user."
+    ),
     "parameters": {
         "type": "object",
-        "properties": {}, # No parameters needed for this version
+        "properties": {}, # No parameters needed
         "required": []
     }
 }
 
 async def load_healthy_swap(user_data_dir: pathlib.Path) -> str:
     """
-    Loads healthy food swap data for the user from the dedicated healthy_swap.json file
-    and updates the user_profile.json with this data.
+    Loads healthy food swap data for the user from the dedicated healthy_swap.json file,
+    updates the user_profile.json with this data, and returns a structured JSON payload
+    for the LLM, including a 'note_to_ai' and the swap recommendations.
     
     Args:
-        user_data_dir: Path to the user data directory containing healthy_swap.json
+        user_data_dir: Path to the user data directory.
         
     Returns:
-        JSON string containing the healthy swaps data
+        JSON string containing a note for the AI and the healthy swaps data.
     """
     healthy_swap_path = user_data_dir / HEALTHY_SWAP_FILENAME
     user_profile_path = user_data_dir / USER_PROFILE_FILENAME
     
-    print(f"Executing load_healthy_swap tool. Attempting to read: {healthy_swap_path}")
+    logger.info(f"Executing load_healthy_swap tool. Attempting to read: {healthy_swap_path}")
     
     try:
-        # Load from dedicated healthy_swap.json file
-        if healthy_swap_path.exists():
-           # load the healthy swap data
-            healthy_swaps_data = await load_json_async(healthy_swap_path, default_return_type=dict)
-                
+        healthy_swaps_data = await load_json_async(healthy_swap_path, default_return_type=dict)
+        
+        if not healthy_swaps_data or not healthy_swaps_data.get("recommended_swaps"):
+            logger.info(f"Healthy_swap.json not found, empty, or has no recommendations at {healthy_swap_path}")
+            note_to_ai = "I checked for healthy food swap recommendations, but none are currently available for the user. You can inform them of this."
+            payload = {
+                "note_to_ai": note_to_ai,
+                "recommendations": []
+            }
+        else:
             # Update user profile with this data
             profile_data = await load_json_async(user_profile_path, default_return_type=dict)
-            profile_data["healthy_swaps"] = healthy_swaps_data
-            await save_json_async(user_profile_path, profile_data) # Write updated profile back
-            logger.info(f"Updated user profile with healthy swaps data") # Changed print to logger
+            if not isinstance(profile_data, dict): # Ensure profile_data is a dict
+                profile_data = {}
+            profile_data["healthy_swaps"] = copy.deepcopy(healthy_swaps_data) # Store a copy
+            await save_json_async(user_profile_path, profile_data)
+            logger.info(f"Updated user profile with healthy swaps data from {healthy_swap_path}")
 
-        else:
-            logger.info(f"Dedicated healthy_swap.json not found or empty at {healthy_swap_path}") # Changed print to logger
-            healthy_swaps_data = { # Ensure healthy_swaps_data is a dict for the return
-                "NBA": None,
-                "date_recommended": None,
-                "recommended_swaps": None,
-                "notes": None
+            recommendations = healthy_swaps_data.get("recommended_swaps", [])
+            notes_from_data = healthy_swaps_data.get("notes", "General recommendations to improve diet.") # This was overall_notes
+            num_recommendations = len(recommendations)
+
+            ai_summary_parts = [
+                f"The user has {num_recommendations} personalized healthy food swap recommendation(s) available."
+            ]
+            rec_titles = [rec.get('title', 'a recommendation') for rec in recommendations if isinstance(rec, dict)]
+            if rec_titles:
+                ai_summary_parts.append(f"Key recommendations include: {'; '.join(rec_titles)}.")
+
+            # Incorporate notes_from_data (previously overall_notes) into the AI summary
+            if notes_from_data:
+                 ai_summary_parts.append(f"The general guidance for these swaps is: '{notes_from_data}'.")
+
+            ai_summary_parts.append(
+                "Full details are provided in the 'recommendations' list below. "
+                "When presenting to the user, please clearly explain the 'observation' (why the swap is suggested), "
+                "the 'action' (what to swap), and the 'rationale' (the benefit) for each swap. "
+                "Keep it very succient and under 45 seconds."
+            )
+            note_to_ai = " ".join(ai_summary_parts)
+            
+            payload = {
+                "note_to_ai": note_to_ai,
+                "recommendations": recommendations
             }
 
-         # Return the healthy swaps data as a JSON string
-        return json.dumps(healthy_swaps_data, indent=2)
+        return json.dumps(payload, indent=2)
 
     except Exception as e:
-            error_msg = f"Error loading healthy swaps data: {e}"
-            print(error_msg)
-            return json.dumps({"status": "error", "message": error_msg})
+        error_msg = f"Error in load_healthy_swap: {e}"
+        logger.error(error_msg, exc_info=True)
+        return json.dumps({
+            "note_to_ai": f"I encountered an error while trying to fetch healthy swap recommendations: {str(e)}. Please inform the user and suggest trying again later.",
+            "recommendations": [],
+            # "error": error_msg # Removed error from payload to match the two-item requirement, error is in note_to_ai
+        })
        
 ################################################
 ###### Calculate Nutrition Targets ######

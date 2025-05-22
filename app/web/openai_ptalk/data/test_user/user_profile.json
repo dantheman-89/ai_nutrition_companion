@@ -1,26 +1,26 @@
 {
   "basic_info": {
     "preferred_name": "Dan",
-    "age_years": null,
-    "sex": null,
-    "height_cm": null,
-    "weight_kg": null,
-    "bmi_kg_m2": null
+    "age_years": 36,
+    "sex": "Male",
+    "height_cm": 179,
+    "weight_kg": 73,
+    "bmi_kg_m2": 22.8
   },
   "goals": {
     "weight_goals": {
-      "target_weight_kg": null,
-      "goal_timeframe_weeks": null
+      "target_weight_kg": 68,
+      "goal_timeframe_weeks": 26
     },
     "nutritional_goals": {
-      "daily_kilojoules": null,
-      "protein_grams": null,
-      "fat_grams": null,
-      "carbohydrate_grams": null,
-      "fiber_grams": null
+      "daily_kilojoules": 7518,
+      "protein_grams": 117,
+      "fat_grams": 50,
+      "carbohydrate_grams": 220,
+      "fiber_grams": 25
     },
-    "ready_to_calculate_goal": false,
-    "goal_set": false
+    "ready_to_calculate_goal": true,
+    "goal_set": true
   },
   "dietary_preferences": {
     "culture": null,
@@ -31,28 +31,67 @@
     "eating_habits": null
   },
   "vitality_information": {
-    "status": null,
+    "status": "Gold",
     "points": {
-      "current_year": null,
-      "goal_for_diamond": null,
-      "weekly_active_rewards_streak": null
+      "current_year": 48500,
+      "goal_for_diamond": 50000,
+      "weekly_active_rewards_streak": 8
     },
-    "recent_activities": null,
+    "recent_activities": [
+      {
+        "date": "2025-05-03",
+        "type": "Gym Visit",
+        "points": 150
+      },
+      {
+        "date": "2025-05-01",
+        "type": "HealthyFood Purchase",
+        "points": 50
+      },
+      {
+        "date": "2025-04-29",
+        "type": "Parkrun",
+        "points": 300
+      }
+    ],
     "health_checks": {
-      "last_vitality_health_check": null,
-      "weight": null,
-      "height": null,
-      "bmi": null,
-      "blood_pressure": null,
-      "glucose": null,
-      "LDL_cholesterol": null
+      "last_vitality_health_check": "2024-11-15",
+      "weight": 73,
+      "height": 179,
+      "bmi": 22.8,
+      "blood_pressure": "Normal: 120/80",
+      "glucose": "Normal: 4.9 mmol/L",
+      "LDL_cholesterol": null,
+      "LDL cholesterol": "Normal: 2.8 mmol/L"
     }
   },
   "healthy_swaps": {
-    "NBA": null,
-    "date_recommended": null,
-    "recommended_swaps": null,
-    "notes": null
+    "NBA": "Discovery Vitality HealthyFood Swaps",
+    "date_recommended": "2025-05-05",
+    "recommended_swaps": [
+      {
+        "id": "rec_1",
+        "title": "Swap 1\u20132 Processed Meats per Week",
+        "observation": "Frequent purchases of bacon, salami, and sausages",
+        "action": "Swap to chicken or turkey sausage, or sliced roast chicken instead of ham or salami.",
+        "rationale": "Cuts back on salt and saturated fat, but still tastes familiar."
+      },
+      {
+        "id": "rec_2",
+        "title": "Add 2 Vegetables a Day",
+        "observation": "No visible vegetable purchases",
+        "action": "Pick 2 easy veggies like spinach or frozen stir-fry mix and add to meals you already make.",
+        "rationale": "More fiber and nutrients with almost no extra effort."
+      },
+      {
+        "id": "rec_3",
+        "title": "Try 1 Legume Each Week (Start with String Beans)",
+        "observation": "No legumes in basket",
+        "action": "Start with string beans in stir-fries, then try canned lentils or chickpeas in wraps or stews.",
+        "rationale": "Easy protein and fiber boost from plants."
+      }
+    ],
+    "notes": "Recommendations based on recent HealthyFood tagged purchases. Encouraging swaps towards items with higher fibre, lower sugar, and healthier fats."
   },
   "daily_nutrition_log": [],
   "daily_tracking_summary": {

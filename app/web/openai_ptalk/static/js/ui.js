@@ -28,6 +28,21 @@ const elements = {
   selectedFilesCount: document.getElementById('selected-files-count'),
   estimatePhotosBtn: document.getElementById('estimate-photos-btn'),
   processedMealPhotosContainer: document.getElementById('processed-meal-photos-container'),
+  // Weekly Review Panel Elements
+  weeklyReviewContentArea: document.getElementById('weekly-review-content-area'),
+  loadWeeklyReviewBtn: document.getElementById('load-weekly-review-btn'),
+  weeklyReviewSummaryContainer: document.getElementById('weekly-review-summary-container'),
+  energyRing: document.getElementById('energy-ring'),
+  energyRingText: document.getElementById('energy-ring-text'),
+  energyRingStatus: document.getElementById('energy-ring-status'),
+  energyRingSVG: document.getElementById('energy-ring-svg'),
+  energyRingTrack: document.querySelector('#energy-ring-svg .energy-ring-track'),
+  energyRingProgress: document.querySelector('#energy-ring-svg .energy-ring-progress'),
+  weeklyMacronutrientsSummary: document.getElementById('weekly-macronutrients-summary'),
+  dailyEnergyBreakdownContainer: document.getElementById('daily-energy-breakdown-container'),
+  dailyBreakdownBarsContainer: document.getElementById('daily-breakdown-bars-container'),
+  weeklyReviewPlaceholder: document.getElementById('weekly-review-placeholder'),
+  
   // debugging elements
   debugEl: document.getElementById("debug") // for debugging
 };
@@ -51,6 +66,8 @@ function initializeUI() {
   updateConnectionUI("DISCONNECTED");
   updateProfileDisplay({ data: {} });
   updateNutritionTrackingDisplay({});
+  updateWeeklyReviewDisplay({});
+  
   // showChatScreen(); // Debug code, remove this line in production
   
   // Add window resize handler to adjust message container height
@@ -143,12 +160,29 @@ function updateButtonUI(isActive) {
 // Chat UI elements 
 // ---------------------------------------------------------
 
- // Create a new message bubble in the chat
+// Text Formatting Helper
+function formatTextForHTML(text) {
+  if (typeof text !== 'string') {
+    return '';
+  }
+  // First, replace newlines with <br>, then process bold markdown.
+  // This order ensures that **text\nwithbold** becomes <strong>text<br>withbold</strong>.
+  return text
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// Create a new message bubble in the chat
+// Create a new message bubble in the chat
 function createMessageBubble(sender, initialText) {
   const bubbleDiv = document.createElement("div");
-  bubbleDiv.textContent = initialText;
+
+  // Store the raw initial text
+  bubbleDiv.dataset.rawText = initialText;
+  // Use the formatter and set innerHTML
+  bubbleDiv.innerHTML = formatTextForHTML(initialText);
+  
   if (sender === "user") {
-    // Only use the base classes, not Tailwind classes since we defined them in CSS
     bubbleDiv.className = "message-bubble user-message";
   } else { // AI
     bubbleDiv.className = "message-bubble ai-message";
@@ -156,6 +190,22 @@ function createMessageBubble(sender, initialText) {
   elements.messagesSection.appendChild(bubbleDiv);
   scrollToBottom();
   return bubbleDiv;
+}
+
+// New function to update existing message bubble content
+function updateMessageBubbleContent(bubbleElement, newRawTextChunk) {
+  if (!bubbleElement) return;
+
+  // Retrieve current raw text, append new chunk
+  let currentRawText = bubbleElement.dataset.rawText || "";
+  currentRawText += newRawTextChunk;
+  
+  // Store updated raw text
+  bubbleElement.dataset.rawText = currentRawText;
+  
+  // Re-render the entire bubble content with formatting
+  bubbleElement.innerHTML = formatTextForHTML(currentRawText);
+  scrollToBottom(); // Ensure visibility
 }
 
 function scrollToBottom() {
@@ -522,6 +572,221 @@ function displayProcessedMealResults(data) { // data is expected to be { process
     elements.estimatePhotosBtn.textContent = 'Estimate Nutrition';
   };
 }
+
+
+// --- Update "Weekly Review" Panel (Third Panel) ---
+// Helper function to parse hex color and interpolate (remains the same)
+function interpolateColor(color1Hex, color2Hex, factor) {
+  const hexToRgb = (hex) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) { // #RGB
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) { // #RRGGBB
+      r = parseInt(hex[1] + hex[2], 16);
+      g = parseInt(hex[3] + hex[4], 16);
+      b = parseInt(hex[5] + hex[6], 16);
+    }
+    return [r, g, b];
+  };
+
+  const c1 = hexToRgb(color1Hex);
+  const c2 = hexToRgb(color2Hex);
+
+  const r = Math.round(c1[0] + factor * (c2[0] - c1[0]));
+  const g = Math.round(c1[1] + factor * (c2[1] - c1[1]));
+  const b = Math.round(c1[2] + factor * (c2[2] - c1[2]));
+  return `rgb(${r},${g},${b})`;
+}
+
+// Define colors from CSS variables (ensure these match your CSS)
+// Make sure these hex values correspond to your --record-green and --over-quota-red CSS variables
+const COLOR_GREEN = '#10b981'; // --record-green
+const COLOR_YELLOW = '#FAB402'; // middle yellow color
+const COLOR_RED = '#b91c1c';   // --over-quota-red
+
+function updateWeeklyReviewDisplay(msg) {
+  const data = msg && msg.payload ? msg.payload : {};
+  debug("Updating Weekly Review panel with data:", data);
+
+  // Re-enable the button once data processing starts (or finishes)
+  if (elements.loadWeeklyReviewBtn) {
+    elements.loadWeeklyReviewBtn.disabled = false;
+    elements.loadWeeklyReviewBtn.textContent = 'Review Last 7 Days';
+  }
+
+  if (!elements.weeklyReviewContentArea) { /* ... */ return; }
+  if (!elements.weeklyReviewSummaryContainer || /* ... */ !elements.energyRingSVG || !elements.energyRingTrack || !elements.energyRingProgress) { /* ... */ return; }
+  
+  elements.weeklyMacronutrientsSummary.innerHTML = '';
+  elements.dailyBreakdownBarsContainer.innerHTML = '';
+
+  if (!data || !data.weekly_review_summary || !data.daily_energy_breakdown || Object.keys(data).length === 0) {
+    debug("Weekly review data is incomplete, missing, or empty. Displaying placeholder.");
+    elements.weeklyReviewPlaceholder.textContent = "";
+    elements.weeklyReviewPlaceholder.style.display = 'block';
+    elements.weeklyReviewSummaryContainer.style.display = 'none';
+    elements.dailyEnergyBreakdownContainer.style.display = 'none';
+    return;
+  }
+
+  elements.weeklyReviewPlaceholder.style.display = 'none';
+  elements.weeklyReviewSummaryContainer.style.display = 'block';
+  elements.dailyEnergyBreakdownContainer.style.display = 'block';
+
+  // --- Color Logic Helper Functions ---
+  const getColor = (percentage, type = 'standard') => {
+    percentage = Math.max(0, percentage); // Ensure percentage is not negative
+
+    if (type === 'fibre') {
+      // Fibre: Green at 100%+, interpolates Red -> Yellow/Orange -> Green from 60% to 100%
+      const lowerBoundRed = 60;
+      const midPointYellow = 80; // Point where it's fully Yellow/Orange
+      const upperBoundGreen = 100;
+
+      if (percentage >= upperBoundGreen) return COLOR_GREEN;
+      if (percentage <= lowerBoundRed) return COLOR_RED;
+      
+      if (percentage < midPointYellow) { // Interpolate Red to Yellow/Orange (60% to 80%)
+        const factor = (percentage - lowerBoundRed) / (midPointYellow - lowerBoundRed);
+        return interpolateColor(COLOR_RED, COLOR_YELLOW, factor);
+      } else { // Interpolate Yellow/Orange to Green (80% to 100%)
+        const factor = (percentage - midPointYellow) / (upperBoundGreen - midPointYellow);
+        return interpolateColor(COLOR_YELLOW, COLOR_GREEN, factor);
+      }
+    } else { // Standard for energy, protein, carb, fat, daily bars
+      // Standard: Green at 100% or less, interpolates Green -> Yellow/Orange -> Red from 100% to 115%
+      const lowerBoundGreen = 100;
+      const midPointYellow = 107.5; // Point where it's fully Yellow/Orange
+      const upperBoundRed = 115;
+
+      if (percentage <= lowerBoundGreen) return COLOR_GREEN;
+      if (percentage >= upperBoundRed) return COLOR_RED;
+
+      if (percentage < midPointYellow) { // Interpolate Green to Yellow/Orange (100% to 107.5%)
+        const factor = (percentage - lowerBoundGreen) / (midPointYellow - lowerBoundGreen);
+        return interpolateColor(COLOR_GREEN, COLOR_YELLOW, factor);
+      } else { // Interpolate Yellow/Orange to Red (107.5% to 115%)
+        const factor = (percentage - midPointYellow) / (upperBoundRed - midPointYellow);
+        return interpolateColor(COLOR_YELLOW, COLOR_RED, factor);
+      }
+    }
+  };
+
+  // 1. Populate Total Energy Ring (SVG)
+  const totalEnergy = data.weekly_review_summary.total_energy;
+  const energyTarget = totalEnergy.target_kj || 0;
+  const energyActual = totalEnergy.actual_kj || 0;
+  let energyPercentage = energyTarget > 0 ? (energyActual / energyTarget) * 100 : (energyActual > 0 ? 100 : 0);
+
+  if (elements.energyRingText) elements.energyRingText.textContent = `${Math.round(energyPercentage)}%`;
+  
+  let energyStatusText = "Energy: "; // Start with the prefix
+  if (energyTarget > 0) {
+    const diff = energyActual - energyTarget;
+    const absDiff = Math.abs(diff);
+    if (diff > 0) {
+      energyStatusText += `${absDiff.toLocaleString()} kJ Over Target`;
+    } else if (diff < 0) {
+      energyStatusText += `${absDiff.toLocaleString()} kJ Under Target`;
+    } else {
+      energyStatusText += "On Target";
+    }
+  } else {
+    energyStatusText += `${energyActual.toLocaleString()} kJ Consumed (No Target Set)`;
+  }
+  if (elements.energyRingStatus) elements.energyRingStatus.textContent = energyStatusText;
+
+  // SVG Ring Update - Ensure radius matches the new SVG circle 'r' attribute if calculated dynamically
+  // If you hardcoded 'r' in HTML and CSS, this part might not need 'radius' recalculation
+  // but it's good practice if the JS drives the ring's geometry.
+  // For this change, assuming HTML/CSS sets the base geometry.
+  if (elements.energyRingProgress && elements.energyRingTrack) {
+    // The radius should now be 60 based on the HTML change
+    const radius = 60; // Or parseFloat(elements.energyRingProgress.getAttribute('r'));
+    const circumference = 2 * Math.PI * radius;
+    
+    const visualProgressPercentage = Math.min(energyPercentage, 100); 
+    const offset = circumference - (visualProgressPercentage / 100) * circumference;
+    
+    elements.energyRingProgress.style.strokeDasharray = `${circumference} ${circumference}`;
+    elements.energyRingProgress.style.strokeDashoffset = offset;
+    elements.energyRingProgress.style.stroke = getColor(energyPercentage, 'standard');
+  }
+
+
+  // 2. Populate Weekly Macronutrients Summary
+  elements.weeklyMacronutrientsSummary.innerHTML = ''; 
+  const macros = data.weekly_review_summary.macronutrients_summary || [];
+  macros.forEach(macro => {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'macro-review-item';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'macro-name';
+    nameSpan.textContent = macro.name;
+    const barContainer = document.createElement('div');
+    barContainer.className = 'progress-bar-container';
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+
+    const target = macro.target_g || 0;
+    const actual = macro.actual_g || 0;
+    let percentage = target > 0 ? (actual / target) * 100 : (actual > 0 ? 100 : 0);
+    
+    bar.textContent = `${Math.round(percentage)}%`;
+    const macroType = macro.name.toLowerCase() === 'fibre' ? 'fibre' : 'standard';
+    bar.style.backgroundColor = getColor(percentage, macroType);
+    
+    let barFillPercentage = Math.min(percentage, 100);
+    if (percentage > 100 && macroType === 'standard') {
+        barFillPercentage = 100; 
+    }
+    bar.style.width = `${barFillPercentage}%`; 
+
+
+    barContainer.appendChild(bar);
+    itemDiv.appendChild(nameSpan);
+    itemDiv.appendChild(barContainer);
+    elements.weeklyMacronutrientsSummary.appendChild(itemDiv);
+  });
+
+  // 3. Populate Daily Energy Breakdown
+  elements.dailyBreakdownBarsContainer.innerHTML = '';
+  const dailyBreakdown = data.daily_energy_breakdown || [];
+  dailyBreakdown.forEach(day => {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'daily-energy-bar-item';
+    const dayLabel = document.createElement('span');
+    dayLabel.className = 'day-label';
+    dayLabel.textContent = day.day_label;
+    const barContainer = document.createElement('div');
+    barContainer.className = 'progress-bar-container';
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+
+    const target = day.target_kj || 0;
+    const actual = day.actual_kj || 0;
+    let dailyPercentage = target > 0 ? (actual / target) * 100 : (actual > 0 ? 100 : 0);
+    
+    // Set percentage text directly on the bar element
+    bar.textContent = `${Math.round(dailyPercentage)}%`; 
+    
+    bar.style.backgroundColor = getColor(dailyPercentage, 'standard');
+    
+    let barFillPercentage = Math.min(dailyPercentage, 100);
+    if (dailyPercentage > 100) {
+        barFillPercentage = 100; 
+    }
+    bar.style.width = `${Math.max(0, barFillPercentage)}%`; 
+    
+    barContainer.appendChild(bar);
+    itemDiv.appendChild(dayLabel);
+    itemDiv.appendChild(barContainer);
+    elements.dailyBreakdownBarsContainer.appendChild(itemDiv);
+  });
+}
+
 // ---------------------------------------------------------
 // Debuging UI - Log debug messages if debugging is enabled
 // ---------------------------------------------------------
@@ -561,6 +826,8 @@ export {
   updateConnectionUI,
   updateButtonUI,
   createMessageBubble,
+  updateMessageBubbleContent,
+  formatTextForHTML,
   debug,
   scrollToBottom,
   connectionState,
@@ -571,7 +838,8 @@ export {
   updateNutritionTrackingDisplay,
   displayProcessedMealResults,
   setupPhotoUploadLogic,
-  displayTakeawayRecommendations
+  displayTakeawayRecommendations,
+  updateWeeklyReviewDisplay
 };
 
 // Add these lines for console debugging:
@@ -579,6 +847,7 @@ export {
 if (DEBUG) { // Optional: only expose if DEBUG is true
     window.testUpdateProfile = updateProfileDisplay;
     window.testUpdateNutritionTracking = updateNutritionTrackingDisplay;
-    window.testDisplayTakeawayRecommendations = displayTakeawayRecommendations;
+    window.testUpdateNutritionTracking = updateNutritionTrackingDisplay;
+    window.testUpdateWeeklyReviewDisplay = updateWeeklyReviewDisplay;
     window.uiElements = elements; // Expose elements for inspection too
 }

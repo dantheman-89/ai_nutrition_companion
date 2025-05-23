@@ -83,4 +83,25 @@ function setupEventListeners() {
     });
   } 
 
+  // Load Weekly Review button
+  if (UI.elements.loadWeeklyReviewBtn) {
+    UI.elements.loadWeeklyReviewBtn.addEventListener('click', () => {
+      if (WSClient.isConnected()) {
+        if (WSClient.requestWeeklyReviewData()) {
+          // Optionally, provide UI feedback that data is being loaded
+          UI.elements.loadWeeklyReviewBtn.disabled = true;
+          UI.elements.loadWeeklyReviewBtn.textContent = 'Loading Review...';
+          // The button will be re-enabled by the success/error handling 
+          // or if requestWeeklyReviewData returns false (e.g., not connected)
+          // For now, we assume success will lead to data display which might implicitly re-enable.
+          // A more robust solution would re-enable it in the weekly_review_data handler or on error.
+        }
+      } else {
+        // Handle case where not connected, e.g., show a message
+        UI.debug("Cannot load weekly review: Not connected.");
+        // alert("Not connected. Please connect first."); // Example user feedback
+      }
+    });
+  }
+
 }

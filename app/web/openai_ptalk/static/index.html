@@ -116,6 +116,46 @@
           </div>
         </div>
       </div>
+      <!-- Panel 3: Weekly Review -->
+       <div class="collapsible-panel">
+        <button class="panel-header">
+          <span>Weekly Review</span>
+          <span class="arrow-icon"></span>
+        </button>
+        <div id="weekly-review-content-area" class="panel-content">
+          <!-- Button to trigger loading the review -->
+          <button id="load-weekly-review-btn" class="action-btn" style="margin-bottom: 15px;">Review Last 7 Days</button>
+          
+          <!-- Container for the weekly review summary -->
+          <div id="weekly-review-summary-container" class="tracking-card mb-4" style="display: none;">
+            <h4 class="card-title">Weekly Intake vs. Target</h4> <!-- Changed title -->
+            <div class="weekly-summary-layout">
+              <div class="energy-ring-container">
+                <!-- SVG for the ring - Increased size -->
+                <svg id="energy-ring-svg" class="energy-ring-svg" width="140" height="140" viewBox="0 0 140 140">
+                  <circle class="energy-ring-track" cx="70" cy="70" r="60" fill="transparent" stroke-width="12"></circle>
+                  <circle class="energy-ring-progress" cx="70" cy="70" r="60" fill="transparent" stroke-width="12" transform="rotate(-90 70 70)"></circle>
+                </svg>
+                <!-- Text elements positioned over the SVG via CSS -->
+                <span id="energy-ring-text" class="energy-ring-text"></span>
+                <p id="energy-ring-status" class="energy-ring-status-text"></p>
+              </div>
+              <div id="weekly-macronutrients-summary" class="weekly-macros-container">
+              </div>
+            </div>
+          </div>
+
+          <!-- Container for the daily energy breakdown -->
+          <div id="daily-energy-breakdown-container" class="tracking-card" style="display: none;">
+            <h4 class="card-title">Daily Energy Intake vs. Target</h4>
+            <div id="daily-breakdown-bars-container">
+              <!-- Daily bars will be populated by JS -->
+            </div>
+          </div>
+          <p id="weekly-review-placeholder" class="placeholder-text" style="text-align: center; display: none;">Click the button above to load your weekly review.</p>
+        </div>
+      </div>
+
     </div>
     
     <!-- Debug section - Hidden but kept in code -->

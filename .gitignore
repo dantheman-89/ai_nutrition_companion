@@ -12,6 +12,9 @@ generated/*
 # sample codes for testing
 zz_reference/
 
+# CodeCounter
+.VSCodeCounter/
+
 # Distribution / packaging
 .Python
 build/

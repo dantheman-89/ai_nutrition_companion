@@ -20,7 +20,7 @@
   --ui-line-height-normal: 1.4;
   --ui-line-spacing-tight: 2px; /* Tighter line spacing */
   --ui-line-spacing-normal: 4px; /* Normal line spacing */
- 
+  --border-radius-small: 4px; /* Added for consistent rounded corners */
 }
 
 /*============================================================================*/
@@ -949,6 +949,142 @@ body {
   text-align: right;
   word-break: break-all;
 }
+
+/*============================================================================*/
+/*                         WEEKLY REVIEW PANEL STYLES                         */
+/*============================================================================*/
+#weekly-review-content-area .action-btn {
+  display: block; /* Make button take full width available in its container */
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 20px; /* Add some space below the button */
+}
+
+.weekly-summary-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start; /* Align items to the top */
+  margin-bottom: 15px;
+}
+
+.energy-ring-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 150px; /* Ensure enough space for the ring */
+  position: relative; /* For absolute positioning of text */
+}
+
+.energy-ring-svg {
+  width: 140px;
+  height: 140px;
+  margin-bottom: 10px;
+}
+
+.energy-ring-track {
+  stroke: #444; /* Grey track color */
+}
+
+.energy-ring-progress {
+  stroke: var(--record-green); /* Default progress color, will be changed by JS */
+  stroke-linecap: round; /* Makes the ends of the progress arc rounded */
+}
+
+.energy-ring-text {
+  position: absolute;
+  top: 50px; /* Adjusted for 140px SVG height, roughly (140/2 - font_size/2 - stroke_width_approx) */
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.4em; /* Slightly larger text for bigger ring */
+  font-weight: bold;
+  color: var(--text-color);
+  text-align: center;
+  pointer-events: none; 
+}
+.energy-ring-status-text {
+  font-size: 0.85em; /* Adjusted size */
+  color: var(--content-key-text-color);
+  text-align: center;
+  margin-top: 0; /* Remove default margin if any, rely on SVG margin-bottom */
+}
+
+.weekly-macros-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* Space between macro bars */
+}
+
+.macro-review-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.macro-review-item .macro-name {
+  width: 60px; /* Fixed width for macro names */
+  font-size: 0.9em;
+  color: var(--content-key-text-color);
+}
+
+.macro-review-item .progress-bar-container {
+  flex-grow: 1;
+  height: 16px; 
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: var(--border-radius-small); /* Ensures container is rounded */
+  overflow: hidden; /* Crucial for inner bar's radius to be visible correctly */
+}
+
+.macro-review-item .progress-bar {
+  height: 100%;
+  font-size: 0.7em; 
+  line-height: 16px; 
+  color: white;
+  text-align: right;
+  padding-right: 5px;
+  box-sizing: border-box;
+  border-radius: var(--border-radius-small); /* Ensures the fill itself is rounded */
+}
+
+#daily-breakdown-bars-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Space between daily bars */
+}
+
+.daily-energy-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.daily-energy-bar-item .day-label {
+  width: 40px; 
+  font-size: 0.9em;
+  color: var(--content-key-text-color);
+  flex-shrink: 0; /* Prevents the label from shrinking, helping alignment */
+}
+
+.daily-energy-bar-item .progress-bar-container {
+  flex-grow: 1; 
+  height: 16px; 
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: var(--border-radius-small); 
+  overflow: hidden; 
+}
+.daily-energy-bar-item .progress-bar {
+  height: 100%;
+  border-radius: var(--border-radius-small); 
+  /* Added text styling for percentage inside the bar */
+  font-size: 0.7em; 
+  line-height: 16px; /* Match bar height */
+  color: white;
+  text-align: right;
+  padding-right: 5px; /* Space from the right edge of the bar */
+  box-sizing: border-box; /* Ensure padding is included in width */
+  white-space: nowrap; /* Prevent text from wrapping */
+}
+
 
 /*============================================================================*/
 /*                              DEBUG SECTION                                 */

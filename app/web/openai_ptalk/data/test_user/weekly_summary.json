@@ -1,0 +1,24 @@
+{
+  "weekly_review_summary": {
+    "period_label": "Last 7 Days",
+    "total_energy": {
+      "target_kj": 56091,
+      "actual_kj": 58591
+    },
+    "macronutrients_summary": [
+      { "name": "Protein", "target_g": 924, "actual_g": 924 },
+      { "name": "Carb", "target_g": 1568, "actual_g": 1693 },
+      { "name": "Fat", "target_g": 371, "actual_g": 397 },
+      { "name": "Fibre", "target_g": 161, "actual_g": 145 }
+    ]
+  },
+  "daily_energy_breakdown": [
+    { "day_label": "MON", "target_kj": 8013, "actual_kj": 7813 }, 
+    { "day_label": "TUE", "target_kj": 8013, "actual_kj": 8163 }, 
+    { "day_label": "WED", "target_kj": 8013, "actual_kj": 7763 }, 
+    { "day_label": "THU", "target_kj": 8013, "actual_kj": 8213 }, 
+    { "day_label": "FRI", "target_kj": 8013, "actual_kj": 7913 }, 
+    { "day_label": "SAT", "target_kj": 8013, "actual_kj": 9363 }, 
+    { "day_label": "SUN", "target_kj": 8013, "actual_kj": 9363 }  
+  ]
+}

@@ -548,6 +548,23 @@ class RealtimeSession:
                         else:
                             print(f"No profile data to display after {base_function_name}, or profile file was empty/invalid.")
                     
+                        # If targets were calculated successfully, also update the nutrition tracking UI
+                        if base_function_name == CALCULATE_TARGETS_TOOL_DEFINITION["name"] and _output:
+                            tool_result_data = json.loads(_output)
+                            if "error" not in tool_result_data:
+                                # The user_profile.json was updated by calculate_daily_nutrition_targets
+                                current_full_profile = await load_json_async(self.user_data_dir / USER_PROFILE_FILENAME, default_return_type=dict)
+
+                                if current_full_profile:
+                                    nutrition_payload_for_client = await prepare_nutrition_tracking_update(current_full_profile)
+                                    await self.websocket.send_json({
+                                        "type": "nutrition_tracking_update",
+                                        "data": nutrition_payload_for_client
+                                    })
+                                    logger.info(f"Sent nutrition_tracking_update to client after successful target calculation.")
+                                else:
+                                    logger.warning("Could not load profile to send nutrition_tracking_update after target calculation.")
+                    
                     elif base_function_name in [RECOMMEND_HEALTHY_TAKEAWAY_TOOL_DEFINITION["name"]]:
                         if _output:
                             try:

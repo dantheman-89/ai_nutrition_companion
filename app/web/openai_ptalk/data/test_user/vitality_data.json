@@ -11,9 +11,12 @@
         "weekly_active_rewards_streak": 8 
     },
     "recent_activities": [
-        {"date": "2025-05-03", "type": "Gym Visit", "points": 150},
-        {"date": "2025-05-01", "type": "HealthyFood Purchase", "points": 50},
-        {"date": "2025-04-29", "type": "Parkrun", "points": 300}
+        {"date": "2025-06-09", "type": "Gym Visit", "points": 150},
+        {"date": "2025-06-08", "type": "HealthyFood Purchase", "points": 50},
+        {"date": "2025-06-07", "type": "Parkrun", "points": 300}
+    ],
+    "exercise_energy": [
+        {"date": "2025-06-09", "kilojoules": 2104}
     ],
     "health_checks": {
         "last_vitality_health_check": "2024-11-15",

@@ -319,6 +319,9 @@ async def load_vitality_data(user_data_dir: pathlib.Path) -> str:
         if "recent_activities" in vitality_data:
             if "vitality_information" not in profile_data: profile_data["vitality_information"] = {}
             profile_data["vitality_information"]["recent_activities"] = vitality_data["recent_activities"]
+        if "exercise_energy" in vitality_data:
+            if "vitality_information" not in profile_data: profile_data["vitality_information"] = {}
+            profile_data["vitality_information"]["exercise_energy"] = vitality_data["exercise_energy"]
         
         health_checks = vitality_data.get("health_checks", {})
         if isinstance(health_checks, dict):
@@ -636,12 +639,13 @@ async def calculate_daily_nutrition_targets(user_data_dir: pathlib.Path) -> str:
         today_str = datetime.now().date().isoformat() # Use date part of datetime
         
         # Always reset the summary for today if targets are (re)calculated
+        exercise_energy = (profile_data.get("vitality_information", {}).get("exercise_energy", [{}])[0].get("kilojoules", 0) if profile_data.get("vitality_information", {}).get("exercise_energy") else 0)
         profile_data["daily_tracking_summary"] = {
             "date": today_str,
             "energy_quota": {
-                "total_kj": nutrition_targets.get("daily_kilojoules")+2100,
+                "total_kj": nutrition_targets.get("daily_kilojoules") + exercise_energy,
                 "baseline_kj": nutrition_targets.get("daily_kilojoules"),
-                "exercise_kj": 2100 # hardcoded for now, to be replaced with Vitality data
+                "exercise_kj": exercise_energy
             },
             "tracking_details": {
                 "energy":    { "consumed_kj": 0, "target_kj": nutrition_targets.get("daily_kilojoules"), "unit": "kJ", "percentage": 0 },
@@ -757,12 +761,13 @@ async def log_meal_photos_from_filenames(user_data_dir: pathlib.Path, photo_file
         not isinstance(profile_data["daily_tracking_summary"], dict) or \
         profile_data["daily_tracking_summary"].get("date") != today_str:
         
+        exercise_energy = (profile_data.get("vitality_information", {}).get("exercise_energy", [{}])[0].get("kilojoules", 0) if profile_data.get("vitality_information", {}).get("exercise_energy") else 0)
         profile_data["daily_tracking_summary"] = {
             "date": today_str,
             "energy_quota": {
-                "total_kj": nutritional_goals.get("daily_kilojoules"), 
-                "baseline_kj": nutritional_goals.get("daily_kilojoules"), # Assuming baseline is the total target for now
-                "exercise_kj": 0 
+                "total_kj": nutritional_goals.get("daily_kilojoules") + exercise_energy,
+                "baseline_kj": nutritional_goals.get("daily_kilojoules"),
+                "exercise_kj": exercise_energy
             },
             "tracking_details": {
                 "energy":    { "consumed_kj": 0, "target_kj": nutritional_goals.get("daily_kilojoules"), "unit": "kJ", "percentage": 0 },
@@ -874,7 +879,7 @@ async def get_takeaway_recommendations(user_data_dir: pathlib.Path, dietary_pref
         JSON string of a payload containing 'note_to_ai' and 'recommendations'.
     """
     logger.info(f"Tool called: get_takeaway_recommendations (simplified version - always returns fixed options)")
-    await asyncio.sleep(5) # Simulate processing delay
+    await asyncio.sleep(3) # Simulate processing delay
     
     base_data_dir = user_data_dir.parent 
     takeaway_json_path = base_data_dir / "nutrition" / TAKEAWAY_NUTRITION_FILENAME
@@ -1047,24 +1052,33 @@ async def send_plain_email(email_address: str, subject: str, body: str):
         logger.error("SMTP configuration is missing. Cannot send email.")
         return json.dumps({"status": "error", "message": "Server configuration error: SMTP settings not found."})
 
-    sender_email = DEFAULT_ORGANIZER_EMAIL # Or SMTP_USERNAME, typically the same for this setup
+    # Start the email sending in background without waiting
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _send_email_sync, email_address, subject, body)
     
-    msg = MIMEMultipart() # Using MIMEMultipart allows for future expansion (e.g. HTML email)
-    msg["Subject"] = subject
-    msg["From"] = sender_email
-    msg["To"] = email_address
-    
-    # Attach plain text body
-    msg.attach(MIMEText(body, "plain"))
+    # Return immediately with success message
+    logger.info(f"Email queued for sending to {email_address} with subject '{subject}'")
+    return json.dumps({"status": "success", "message": f"I have sent the email to {email_address}."})
 
+def _send_email_sync(email_address: str, subject: str, body: str):
+    """Synchronous email sending function to run in executor"""
     try:
+        sender_email = DEFAULT_ORGANIZER_EMAIL
+        
+        msg = MIMEMultipart()
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = email_address
+        
+        # Attach plain text body
+        msg.attach(MIMEText(body, "plain"))
+
         context = ssl.create_default_context()
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls(context=context)
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.sendmail(sender_email, email_address, msg.as_string())
-        logger.info(f"Email sent to {email_address} with subject '{subject}'")
-        return json.dumps({"status": "success", "message": f"Email with subject '{subject}' sent to {email_address}."})
+        
+        logger.info(f"Email successfully sent to {email_address} with subject '{subject}'")
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
-        return json.dumps({"status": "error", "message": f"Failed to send email. Error: {e}"})
+        logger.error(f"Failed to send email to {email_address}: {e}")
